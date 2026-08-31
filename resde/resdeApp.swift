@@ -12,10 +12,23 @@ import CoreData
 struct resdeApp: App {
     let persistenceController = PersistenceController.shared
 
+    @StateObject private var authService = AuthService(mockData: true)
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            Group {
+                if authService.isAuthenticated {
+                    HomeView()
+                        .environmentObject(authService)
+                } else {
+                    LoginView()
+                        .environmentObject(authService)
+                }
+            }
+            .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            .onAppear {
+                authService.loadTokenFromKeychain()
+            }
         }
     }
 }
