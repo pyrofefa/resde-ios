@@ -5,6 +5,7 @@
 
 import SwiftUI
 import PhotosUI
+import UIKit
 
 struct QuejasView: View {
     @EnvironmentObject var authService: AuthService

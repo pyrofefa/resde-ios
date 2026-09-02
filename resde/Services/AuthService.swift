@@ -206,8 +206,8 @@ class AuthService: ObservableObject {
             self.carouselData = CarouselData(
                 estadoAdeudos: parseCarouselResponse(estadoAdeudosData, type: EstadoAdeudosResponse.self),
                 censo: parseCarouselResponse(censoData, type: CensoResponse.self),
-                mascotas: parseCarouselResponse(mascotasData, type: MascotasResponse.self),
-                vehiculos: parseCarouselResponse(vehiculosData, type: VehiculosResponse.self),
+                mascotas: parseCarouselResponse(mascotasData, type: CarouselMascotasResponse.self),
+                vehiculos: parseCarouselResponse(vehiculosData, type: CarouselVehiculosResponse.self),
                 tarjetas: parseCarouselResponse(tarjetasData, type: TarjetasResponse.self),
                 eventos: parseCarouselResponse(eventosData, type: EventosResponse.self)
             )
