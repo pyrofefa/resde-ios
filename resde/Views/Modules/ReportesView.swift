@@ -34,10 +34,18 @@ struct ReportesView: View {
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(40)
                     } else {
-                        Text("Reporte Financiero")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, 16)
+                        HStack {
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Reporte financiero")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.primary)
+                                Text(viewModel.resumenFinanciero == nil ? "Este mes aún no ha sido publicado." : "Publicado")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 16)
 
                         if let resumen = viewModel.resumenFinanciero {
                             VStack(alignment: .leading, spacing: 12) {
@@ -75,26 +83,58 @@ struct ReportesView: View {
                                     }
                                 }
                                 .padding(12)
-                                .background(Color.white)
+                                .background(Color.cardBackground)
                                 .cornerRadius(8)
                             }
                             .padding(16)
                             .background(Color.blue.opacity(0.05))
                             .cornerRadius(12)
+                            .padding(.horizontal, 16)
                         } else {
-                            VStack(alignment: .center, spacing: 8) {
-                                Text("RESUMEN FINANCIERO")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.blue)
-                                Text("Este mes aún no ha sido publicado.")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.blue)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(16)
-                            .background(Color.blue.opacity(0.05))
-                            .cornerRadius(12)
+                            ReporteCardVacio(title: "RESUMEN FINANCIERO")
                         }
+
+                        ReporteCardVacio(title: "COMPARACIÓN DE FUENTES DE INGRESO")
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("COMPARACIÓN POR CONCEPTOS")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            HStack(spacing: 0) {
+                                Button(action: { viewModel.conceptoSeleccionado = .ingresos }) {
+                                    Text("Ingresos")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(viewModel.conceptoSeleccionado == .ingresos ? Color.selectedTint : Color.clear)
+                                }
+                                Button(action: { viewModel.conceptoSeleccionado = .egresos }) {
+                                    Text("Egresos")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(viewModel.conceptoSeleccionado == .egresos ? Color.selectedTint : Color.clear)
+                                }
+                            }
+                            .background(Color.cardBackground)
+                            .cornerRadius(20)
+                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+
+                            Text("Este mes aún no ha sido publicado.")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity, minHeight: 160)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(16)
+                        .background(Color.cardBackground)
+                        .cornerRadius(12)
+                        .padding(.horizontal, 16)
+
+                        ReporteCardVacio(title: "TENDENCIA DE INGRESOS Y EGRESOS")
 
                         if viewModel.showError {
                             HStack(spacing: 12) {
@@ -115,13 +155,35 @@ struct ReportesView: View {
                 .padding(.vertical, 16)
             }
         }
-        .background(Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1))
+        .background(Color.appBackground)
         .navigationBarBackButtonHidden()
         .onAppear {
             Task {
                 await viewModel.loadReportes()
             }
         }
+    }
+}
+
+struct ReporteCardVacio: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+
+            Text("Este mes aún no ha sido publicado.")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity, minHeight: 160)
+                .multilineTextAlignment(.center)
+        }
+        .padding(16)
+        .background(Color.cardBackground)
+        .cornerRadius(12)
+        .padding(.horizontal, 16)
     }
 }
 

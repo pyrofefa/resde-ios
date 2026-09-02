@@ -40,7 +40,7 @@ struct VehiculosView: View {
                         Spacer()
                     }
                     .padding(16)
-                    .background(Color.white)
+                    .background(Color.cardBackground)
                     .cornerRadius(12)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
                     .padding(.horizontal, 16)
@@ -84,7 +84,7 @@ struct VehiculosView: View {
                                         }
                                         .frame(maxWidth: .infinity)
                                         .padding(16)
-                                        .background(Color.white)
+                                        .background(Color.cardBackground)
                                         .cornerRadius(8)
                                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(red: 0.0, green: 0.4, blue: 0.7), lineWidth: 2))
                                     }
@@ -98,7 +98,7 @@ struct VehiculosView: View {
                                         TextField("Color", text: $viewModel.vehiculos[index].color)
                                             .font(.system(size: 14))
                                             .padding(12)
-                                            .background(Color.white)
+                                            .background(Color.cardBackground)
                                             .cornerRadius(8)
                                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.3), lineWidth: 1))
                                     }
@@ -110,14 +110,14 @@ struct VehiculosView: View {
                                         TextField("Placa", text: $viewModel.vehiculos[index].placa)
                                             .font(.system(size: 14))
                                             .padding(12)
-                                            .background(Color.white)
+                                            .background(Color.cardBackground)
                                             .cornerRadius(8)
                                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.3), lineWidth: 1))
                                     }
                                 }
                             }
                             .padding(16)
-                            .background(Color.white)
+                            .background(Color.cardBackground)
                             .cornerRadius(12)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
                         }
@@ -165,7 +165,7 @@ struct VehiculosView: View {
                 }
             }
         }
-        .background(Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1))
+        .background(Color.appBackground)
         .navigationBarBackButtonHidden()
         .onAppear {
             guard let ubicacionId = Int(authService.user?.ubicaciones.first?.key ?? "") else { return }

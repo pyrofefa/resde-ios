@@ -1,6 +1,11 @@
 import SwiftUI
 import Combine
 
+enum ConceptoReporte {
+    case ingresos
+    case egresos
+}
+
 @MainActor
 class ReportesViewModel: ObservableObject {
     @Published var selectedDate = Date()
@@ -8,8 +13,13 @@ class ReportesViewModel: ObservableObject {
     @Published var isLoading = true
     @Published var errorMessage = ""
     @Published var showError = false
+    @Published var conceptoSeleccionado: ConceptoReporte = .ingresos
 
     private let authService = AuthService(mockData: false)
+
+    init() {
+        authService.loadTokenFromKeychain()
+    }
 
     var monthYearString: String {
         let formatter = DateFormatter()
@@ -24,9 +34,17 @@ class ReportesViewModel: ObservableObject {
         let fechaParam = dateFormatter.string(from: selectedDate)
 
         if let data = await fetchBalanceMensual(fecha: fechaParam) {
-            if let response = try? JSONDecoder().decode(BalanceMensualResponse.self, from: data) {
+            do {
+                let response = try JSONDecoder().decode(BalanceMensualResponse.self, from: data)
                 await MainActor.run {
                     self.resumenFinanciero = response.data
+                    self.isLoading = false
+                }
+            } catch {
+                print("❌ Error decodificando balance: \(error)")
+                await MainActor.run {
+                    self.errorMessage = "Error al cargar el reporte"
+                    self.showError = true
                     self.isLoading = false
                 }
             }

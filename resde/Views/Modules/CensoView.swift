@@ -45,7 +45,7 @@ struct CensoView: View {
                             Spacer()
                         }
                         .padding(16)
-                        .background(Color.white)
+                        .background(Color.cardBackground)
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
                         .padding(.horizontal, 16)
@@ -103,7 +103,7 @@ struct CensoView: View {
                 }
             }
         }
-        .background(Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1))
+        .background(Color.appBackground)
         .navigationBarBackButtonHidden()
         .onAppear {
             guard let ubicacionId = authService.user?.ubicaciones.first?.key else { return }
@@ -134,12 +134,12 @@ struct CensoFieldView: View {
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
                 .padding(16)
-                .background(Color.white)
+                .background(Color.cardBackground)
                 .cornerRadius(12)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.3), lineWidth: 1))
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color.cardBackground)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
     }

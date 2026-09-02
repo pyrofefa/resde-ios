@@ -50,7 +50,7 @@ struct QuejasView: View {
                             Spacer()
                         }
                         .padding(16)
-                        .background(Color.white)
+                        .background(Color.cardBackground)
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
 
@@ -77,7 +77,7 @@ struct QuejasView: View {
                     .padding(16)
                 }
             }
-            .background(Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1))
+            .background(Color.appBackground)
             .navigationBarBackButtonHidden()
 
             VStack {
@@ -199,7 +199,7 @@ struct QuejaCard: View {
                 .lineLimit(2)
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color.cardBackground)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
     }
@@ -262,7 +262,7 @@ struct CreateQuejaSheet: View {
                 }
             }
             .padding(16)
-            .background(Color.white)
+            .background(Color.cardBackground)
             .borderBottom()
 
             ScrollView {
@@ -317,7 +317,7 @@ struct CreateQuejaSheet: View {
                             }
                             .padding(12)
                             .frame(maxWidth: .infinity)
-                            .background(Color.white)
+                            .background(Color.cardBackground)
                             .cornerRadius(12)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.blue, lineWidth: 2))
                         }
@@ -332,7 +332,7 @@ struct CreateQuejaSheet: View {
                             .font(.system(size: 16))
                             .frame(height: 120)
                             .padding(12)
-                            .background(Color.white)
+                            .background(Color.cardBackground)
                             .cornerRadius(12)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
                     }
@@ -410,7 +410,7 @@ struct CreateQuejaSheet: View {
                 .padding(16)
             }
         }
-        .background(Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1))
+        .background(Color.appBackground)
         .sheet(isPresented: $showCamera) {
             CameraView(image: $selectedImage)
         }

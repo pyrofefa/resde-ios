@@ -49,7 +49,7 @@ struct TarjetasView: View {
                         Spacer()
                     }
                     .padding(16)
-                    .background(Color.white)
+                    .background(Color.cardBackground)
                     .cornerRadius(12)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
 
@@ -97,13 +97,13 @@ struct TarjetasView: View {
                         }
                     }
                     .padding(16)
-                    .background(Color.white)
+                    .background(Color.cardBackground)
                     .cornerRadius(12)
                 }
                 .padding(16)
             }
         }
-        .background(Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1))
+        .background(Color.appBackground)
         .navigationBarBackButtonHidden()
         .sheet(item: $selectedTarjeta) { tarjeta in
             DeactivateTarjetaSheet(tarjeta: tarjeta, isPresented: $showDeactivateSheet)
@@ -192,7 +192,7 @@ struct TarjetaCard: View {
             Spacer()
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color.cardBackground)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
     }
@@ -237,7 +237,7 @@ struct DeactivateTarjetaSheet: View {
                     Spacer()
                 }
                 .padding(12)
-                .background(Color(.sRGB, red: 0.97, green: 0.97, blue: 0.99, opacity: 1))
+                .background(Color.cardBackground)
                 .cornerRadius(12)
                 .padding(.horizontal, 16)
 
@@ -275,7 +275,7 @@ struct DeactivateTarjetaSheet: View {
                             .foregroundColor(.blue)
                             .frame(maxWidth: .infinity)
                             .padding(12)
-                            .background(Color(.sRGB, red: 0.95, green: 0.95, blue: 0.98, opacity: 1))
+                            .background(Color.blueTint)
                             .cornerRadius(8)
                     }
                     .disabled(isDeactivating)
@@ -285,11 +285,11 @@ struct DeactivateTarjetaSheet: View {
                 .padding(.bottom, 16)
             }
             .frame(maxWidth: .infinity)
-            .background(Color.white)
+            .background(Color.cardBackground)
 
             Spacer()
         }
-        .background(Color.white)
+        .background(Color.cardBackground)
     }
 
     private func deactivateTarjeta() async {
