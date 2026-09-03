@@ -90,7 +90,7 @@ struct EventosView: View {
                                 }
                                 .padding(12)
                                 .frame(maxWidth: .infinity)
-                                .background(Color.white)
+                                .background(Color.cardBackground)
                                 .cornerRadius(12)
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.blue, lineWidth: 2))
                             }
@@ -132,7 +132,7 @@ struct EventosView: View {
                             )
                         }
                         .padding(16)
-                        .background(Color.white)
+                        .background(Color.cardBackground)
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
 
@@ -164,7 +164,7 @@ struct EventosView: View {
                     .padding(16)
                 }
             }
-            .background(Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1))
+            .background(Color.appBackground)
             .navigationBarBackButtonHidden()
 
             VStack {
@@ -440,7 +440,7 @@ struct EventoCard: View {
             }
         }
         .padding(12)
-        .background(Color.white)
+        .background(Color.cardBackground)
         .cornerRadius(8)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.2), lineWidth: 1))
     }
@@ -516,7 +516,7 @@ struct CreateEventoSheet: View {
                 }
             }
             .padding(16)
-            .background(Color.white)
+            .background(Color.cardBackground)
             .borderBottom()
 
             ScrollView {
@@ -593,7 +593,7 @@ struct CreateEventoSheet: View {
                         TextField("Evento Privado", text: $tituloEvento)
                             .font(.system(size: 16))
                             .padding(12)
-                            .background(Color.white)
+                            .background(Color.cardBackground)
                             .cornerRadius(12)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
                     }
@@ -657,7 +657,7 @@ struct CreateEventoSheet: View {
                             .font(.system(size: 16))
                             .frame(height: 100)
                             .padding(12)
-                            .background(Color.white)
+                            .background(Color.cardBackground)
                             .cornerRadius(12)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
                     }
@@ -684,7 +684,7 @@ struct CreateEventoSheet: View {
                 .padding(16)
             }
             }
-            .background(Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1))
+            .background(Color.appBackground)
         .onAppear {
             let validDate = max(fechaPreseleccionada, fechaMinima)
             fechaEvento = validDate

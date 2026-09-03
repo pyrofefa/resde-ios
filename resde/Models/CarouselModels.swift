@@ -8,8 +8,8 @@ import Foundation
 struct CarouselData {
     var estadoAdeudos: EstadoAdeudosResponse?
     var censo: CensoResponse?
-    var mascotas: MascotasResponse?
-    var vehiculos: VehiculosResponse?
+    var mascotas: CarouselMascotasResponse?
+    var vehiculos: CarouselVehiculosResponse?
     var tarjetas: TarjetasResponse?
     var eventos: EventosResponse?
 }
@@ -59,13 +59,13 @@ struct CensoResponse: Codable {
     let message: String?
 }
 
-struct MascotasResponse: Codable {
+struct CarouselMascotasResponse: Codable {
     let success: Bool?
     let total_mascotas: Int?
     let message: String?
 }
 
-struct VehiculosResponse: Codable {
+struct CarouselVehiculosResponse: Codable {
     let success: Bool?
     let total_vehiculos: Int?
     let message: String?

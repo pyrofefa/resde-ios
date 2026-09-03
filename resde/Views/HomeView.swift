@@ -13,7 +13,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1)
+                Color.appBackground
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -194,7 +194,7 @@ struct UbicacionCard: View {
                 )
             }
         }
-        .background(Color.white)
+        .background(Color.cardBackground)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
     }
@@ -454,7 +454,7 @@ struct InfoCard: View {
         .background(
             index == 0
                 ? Color(red: 1, green: 0.95, blue: 0.95)
-                : Color.white
+                : Color.cardBackground
         )
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
@@ -550,7 +550,7 @@ struct ResumenCardItem: View {
 
             Text(subtitle)
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundColor(.black.opacity(0.6))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -618,7 +618,7 @@ struct PanoramaContent: View {
             }
         }
         .padding(12)
-        .background(Color.white)
+        .background(Color.cardBackground)
         .cornerRadius(8)
     }
 }
@@ -762,7 +762,7 @@ struct ModuleCard: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 100)
-        .background(Color.white)
+        .background(Color.cardBackground)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
     }
