@@ -29,6 +29,9 @@ struct resdeApp: App {
             .onAppear {
                 authService.loadTokenFromKeychain()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .tokenInvalido)) { _ in
+                authService.logout()
+            }
         }
     }
 }

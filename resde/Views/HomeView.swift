@@ -268,16 +268,20 @@ struct InfoCarousel: View {
 
         var items: [CarouselItem] = []
 
-        let cuotaMonto = authService.carouselData.estadoAdeudos?.data?.cuotaActualMonto ?? 0
-        let cuotaLabel = authService.carouselData.estadoAdeudos?.data?.cuotaSub ?? "Enero – Agosto sin ningún pago registrado ($1,200)."
+        let estadoAdeudos = authService.carouselData.estadoAdeudos?.data
+        let alCorriente = (estadoAdeudos?.saldoPendiente ?? 0) <= 0
+        let cuotaMonto = estadoAdeudos?.cuotaActualMonto ?? 0
+        let cuotaLabel = estadoAdeudos?.cuotaSub ?? "Enero – Agosto sin ningún pago registrado ($1,200)."
+        let cuotaTitulo = estadoAdeudos?.cuotaActualLabel?.uppercased()
+            ?? "CUOTA DE \((estadoAdeudos?.cuotaActual?.mes ?? "").uppercased())"
         items.append(CarouselItem(
             id: 0,
-            title: "CUOTA DE AGOSTO",
+            title: cuotaTitulo,
             value: String(format: "$%.2f", cuotaMonto),
-            subtitle: "Por pagar",
+            subtitle: alCorriente ? "" : "Por pagar",
             description: cuotaLabel,
-            backgroundColor: Color(red: 1, green: 0.95, blue: 0.95),
-            titleColor: Color(red: 0.9, green: 0.2, blue: 0.2)
+            backgroundColor: alCorriente ? Color(red: 0.9, green: 0.98, blue: 0.9) : Color.redTint,
+            titleColor: alCorriente ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.9, green: 0.2, blue: 0.2)
         ))
 
         items.append(CarouselItem(
@@ -398,9 +402,11 @@ struct CarouselItemCard: View {
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(item.titleColor)
 
-            Text(item.subtitle)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(item.titleColor)
+            if !item.subtitle.isEmpty {
+                Text(item.subtitle)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(item.titleColor)
+            }
 
             Text(item.description)
                 .font(.system(size: 11))
@@ -481,7 +487,7 @@ struct ResumenCards: View {
     let estadoAdeudos: EstadoAdeudosResponse?
 
     var body: some View {
-        let validado = estadoAdeudos?.data?.montoValidadoAnio ?? 0
+        let validado = estadoAdeudos?.data?.validadoMonto ?? estadoAdeudos?.data?.montoValidadoAnio ?? 0
         let parcial = estadoAdeudos?.data?.montoParcial ?? 0
         let pendiente = estadoAdeudos?.data?.montoPendiente ?? 0
         let faltante = estadoAdeudos?.data?.montoFaltante ?? 0
@@ -495,7 +501,7 @@ struct ResumenCards: View {
                 ResumenCardItem(
                     title: "VALIDADO",
                     amount: String(format: "$%.2f", validado),
-                    subtitle: "\(validadoCount) meses cubiertos",
+                    subtitle: estadoAdeudos?.data?.validadoLabel ?? "\(validadoCount) meses cubiertos",
                     backgroundColor: Color(red: 0.9, green: 0.98, blue: 0.9),
                     titleColor: Color(red: 0.2, green: 0.7, blue: 0.2)
                 )
@@ -503,7 +509,7 @@ struct ResumenCards: View {
                 ResumenCardItem(
                     title: "PARCIAL",
                     amount: String(format: "$%.2f", parcial),
-                    subtitle: "\(parcialCount) meses incompletos",
+                    subtitle: estadoAdeudos?.data?.parcialLabel ?? "\(parcialCount) meses incompletos",
                     backgroundColor: Color(red: 0.98, green: 0.94, blue: 0.88),
                     titleColor: Color(red: 1, green: 0.65, blue: 0)
                 )
@@ -513,7 +519,7 @@ struct ResumenCards: View {
                 ResumenCardItem(
                     title: "PENDIENTE DE VALIDAR",
                     amount: String(format: "$%.2f", pendiente),
-                    subtitle: "\(pendienteCount) meses sin validar",
+                    subtitle: estadoAdeudos?.data?.pendienteLabel ?? "\(pendienteCount) meses sin validar",
                     backgroundColor: Color(red: 1, green: 0.98, blue: 0.88),
                     titleColor: Color(red: 1, green: 0.8, blue: 0)
                 )
@@ -521,7 +527,7 @@ struct ResumenCards: View {
                 ResumenCardItem(
                     title: "SIN PAGO",
                     amount: String(format: "$%.2f", faltante),
-                    subtitle: "\(faltanteCount) meses sin registrar",
+                    subtitle: estadoAdeudos?.data?.faltanteLabel ?? "\(faltanteCount) meses sin registrar",
                     backgroundColor: Color(red: 1, green: 0.9, blue: 0.9),
                     titleColor: Color(red: 0.9, green: 0.2, blue: 0.2)
                 )
@@ -570,13 +576,17 @@ struct PanoramaSection: View {
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
 
-            PanoramaContent(mesesDetalle: authService.carouselData.estadoAdeudos?.data?.mesesDetalle ?? [])
+            PanoramaContent(
+                mesesDetalle: authService.carouselData.estadoAdeudos?.data?.mesesDetalle ?? [],
+                cuotaSub: authService.carouselData.estadoAdeudos?.data?.cuotaSub
+            )
         }
     }
 }
 
 struct PanoramaContent: View {
     let mesesDetalle: [MesDetalle]
+    let cuotaSub: String?
     let months = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
 
     func colorForStatus(_ status: String?) -> Color {
@@ -598,7 +608,7 @@ struct PanoramaContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(mesesDetalle.first?.tooltip ?? "Enero – Agosto sin ningún pago registrado ($1,200).")
+            Text(cuotaSub ?? "Enero – Agosto sin ningún pago registrado ($1,200).")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
 

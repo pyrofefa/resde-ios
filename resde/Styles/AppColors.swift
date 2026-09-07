@@ -38,6 +38,13 @@ extension Color {
             ? UIColor(red: 0.36, green: 0.16, blue: 0.16, alpha: 1.0)
             : UIColor(red: 1.0, green: 0.9, blue: 0.9, alpha: 1.0)
     })
+
+    /// Tinte verde claro para tarjetas de confirmación/éxito. Se oscurece en modo oscuro.
+    static let greenTint = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.13, green: 0.26, blue: 0.18, alpha: 1.0)
+            : UIColor(red: 0.88, green: 0.96, blue: 0.9, alpha: 1.0)
+    })
 }
 
 struct AppBackgroundModifier: ViewModifier {

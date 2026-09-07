@@ -67,6 +67,7 @@ class ReportesViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 403 {
                     return nil

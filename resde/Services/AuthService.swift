@@ -235,6 +235,7 @@ class AuthService: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Status code: \(httpResponse.statusCode)")
             }
@@ -267,6 +268,30 @@ class AuthService: ObservableObject {
         }
 
         return "Datos inválidos"
+    }
+}
+
+extension Notification.Name {
+    /// Se dispara cuando cualquier llamada a la API responde 401 (token inválido/expirado).
+    static let tokenInvalido = Notification.Name("TokenInvalido")
+}
+
+/// Revisa la respuesta de una llamada a la API; si es 401, notifica para que la sesión se cierre.
+/// Debe llamarse justo después de cada `URLSession.shared.data(for:)` que use el Bearer token.
+func checkTokenInvalido(_ response: URLResponse?) {
+    guard let httpResponse = response as? HTTPURLResponse else { return }
+
+    // Algunos endpoints responden 401/419 en JSON; otros, cuando el token es
+    // inválido, terminan redirigiendo (302 → 200) a la página HTML de login
+    // en vez de devolver un error de API. Detectamos ambos casos.
+    let redirigioALogin = httpResponse.url?.path.contains("/login") == true
+    let statusInvalido = httpResponse.statusCode == 401 || httpResponse.statusCode == 419
+
+    if statusInvalido || redirigioALogin {
+        print("🔒 Token inválido/expirado (\(httpResponse.statusCode)\(redirigioALogin ? ", redirigido a /login" : "")) — cerrando sesión")
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .tokenInvalido, object: nil)
+        }
     }
 }
 
