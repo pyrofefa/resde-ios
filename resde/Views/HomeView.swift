@@ -9,6 +9,11 @@ struct HomeView: View {
     @EnvironmentObject var authService: AuthService
     @State private var selectedUbicacion: String = ""
     @State private var showUbicacionMenu = false
+    @State private var showConfirmarApertura = false
+    @State private var isSolicitandoApertura = false
+    @State private var showAperturaToast = false
+    @State private var aperturaToastMensaje = ""
+    @State private var showConfirmarLogout = false
 
     var body: some View {
         NavigationStack {
@@ -17,7 +22,10 @@ struct HomeView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    HomeToolbar()
+                    HomeToolbar(
+                        showConfirmarApertura: $showConfirmarApertura,
+                        showConfirmarLogout: $showConfirmarLogout
+                    )
 
                     ScrollView {
                         HomeContent(
@@ -28,6 +36,45 @@ struct HomeView: View {
                     .refreshable {
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
                     }
+                }
+
+                if showConfirmarApertura {
+                    ConfirmarAperturaOverlay(
+                        isLoading: isSolicitandoApertura,
+                        onCancel: { showConfirmarApertura = false },
+                        onConfirm: {
+                            Task {
+                                await solicitarAperturaPluma()
+                            }
+                        }
+                    )
+                }
+
+                if showConfirmarLogout {
+                    ConfirmarLogoutOverlay(
+                        onCancel: { showConfirmarLogout = false },
+                        onConfirm: {
+                            showConfirmarLogout = false
+                            authService.logout()
+                        }
+                    )
+                }
+
+                if showAperturaToast {
+                    VStack {
+                        Spacer()
+                        Text(aperturaToastMensaje)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(Color.black.opacity(0.85))
+                            .cornerRadius(8)
+                            .padding(.bottom, 24)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
                 }
             }
             .onAppear {
@@ -46,6 +93,85 @@ struct HomeView: View {
                         await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                     }
                 }
+            }
+        }
+    }
+
+    private func mostrarAperturaToast(_ mensaje: String) {
+        aperturaToastMensaje = mensaje
+        withAnimation {
+            showAperturaToast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            withAnimation {
+                showAperturaToast = false
+            }
+        }
+    }
+
+    private func solicitarAperturaPluma() async {
+        guard let ubicacionIdStr = authService.user?.ubicaciones.first?.key,
+              let ubicacionId = Int(ubicacionIdStr) else {
+            await MainActor.run {
+                showConfirmarApertura = false
+                mostrarAperturaToast("No se pudo determinar la ubicación")
+            }
+            return
+        }
+
+        await MainActor.run {
+            isSolicitandoApertura = true
+        }
+
+        guard let url = URL(string: "https://resde.aseenti.com.mx/api/v1/pluma/abrir") else {
+            await MainActor.run {
+                isSolicitandoApertura = false
+                showConfirmarApertura = false
+                mostrarAperturaToast("URL inválida")
+            }
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(authService.token ?? "")", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let params: [String: Any] = [
+            "ubicacion_id": ubicacionId,
+            "dispositivo": UIDevice.current.name
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: params)
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+            if statusCode >= 200 && statusCode < 300 {
+                let mensaje = (try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data))?.message
+                    ?? "Solicitud de apertura iniciada"
+                await MainActor.run {
+                    isSolicitandoApertura = false
+                    showConfirmarApertura = false
+                    mostrarAperturaToast(mensaje)
+                }
+            } else {
+                let mensaje = (try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data))?.message
+                    ?? "No se pudo iniciar la apertura"
+                await MainActor.run {
+                    isSolicitandoApertura = false
+                    showConfirmarApertura = false
+                    mostrarAperturaToast(mensaje)
+                }
+            }
+        } catch {
+            print("❌ Error al solicitar apertura de pluma: \(error)")
+            await MainActor.run {
+                isSolicitandoApertura = false
+                showConfirmarApertura = false
+                mostrarAperturaToast("No se pudo iniciar la apertura")
             }
         }
     }
@@ -92,6 +218,8 @@ struct HomeContent: View {
 // MARK: - HomeToolbar
 struct HomeToolbar: View {
     @EnvironmentObject var authService: AuthService
+    @Binding var showConfirmarApertura: Bool
+    @Binding var showConfirmarLogout: Bool
 
     var body: some View {
         HStack {
@@ -107,16 +235,139 @@ struct HomeToolbar: View {
 
             Spacer()
 
-            Button(action: {
-                authService.logout()
-            }) {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
+            HStack(spacing: 20) {
+                Button(action: {
+                    showConfirmarApertura = true
+                }) {
+                    Image(systemName: "key.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white)
+                }
+
+                Button(action: {
+                    showConfirmarLogout = true
+                }) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white)
+                }
             }
         }
         .padding(16)
         .background(Color(red: 0.05, green: 0.2, blue: 0.35))
+    }
+}
+
+struct AperturaPlumaResponse: Codable {
+    let status: String?
+    let message: String?
+    let call_id: String?
+}
+
+struct ConfirmarAperturaOverlay: View {
+    let isLoading: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture { if !isLoading { onCancel() } }
+
+            VStack(alignment: .leading, spacing: 16) {
+                Image("logoApp")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 44)
+                    .cornerRadius(10)
+
+                Text("Confirmar apertura")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Text("¿Deseas iniciar la solicitud de apertura?")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Spacer()
+                    if isLoading {
+                        ProgressView()
+                            .padding(.trailing, 8)
+                    }
+                    Button(action: onCancel) {
+                        Text("Cancelar")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    .disabled(isLoading)
+                    .padding(.trailing, 16)
+
+                    Button(action: onConfirm) {
+                        Text("Confirmar")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.blue)
+                    }
+                    .disabled(isLoading)
+                }
+            }
+            .padding(20)
+            .background(Color.cardBackground)
+            .cornerRadius(12)
+            .frame(maxWidth: 320)
+            .padding(.horizontal, 32)
+        }
+    }
+}
+
+struct ConfirmarLogoutOverlay: View {
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture { onCancel() }
+
+            VStack(alignment: .leading, spacing: 16) {
+                Image("logoApp")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 44)
+                    .cornerRadius(10)
+
+                Text("Cerrar sesión")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Text("¿Seguro que quieres cerrar sesión?")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Spacer()
+                    Button(action: onCancel) {
+                        Text("Cancelar")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    .padding(.trailing, 16)
+
+                    Button(action: onConfirm) {
+                        Text("Cerrar sesión")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.cardBackground)
+            .cornerRadius(12)
+            .frame(maxWidth: 320)
+            .padding(.horizontal, 32)
+        }
     }
 }
 

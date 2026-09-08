@@ -250,22 +250,22 @@ struct PagoRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 40) {
+        HStack(spacing: 10) {
             Text(pago.folio_pago ?? "N/A")
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 9, weight: .bold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(pago.fecha ?? "N/A")
-                .font(.system(size: 14))
+                .font(.system(size: 12))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(pago.ubicacion?.direccion ?? "N/A")
-                .font(.system(size: 14))
+                .font(.system(size: 12))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
         .background(colorEstatus)
         .cornerRadius(8)
     }

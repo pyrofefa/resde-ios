@@ -16,7 +16,7 @@ struct MensualidadesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModuleHeader(title: "Estado de Deuda")
+            ModuleHeader(title: "Estado de Deuda", showYear: false)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
