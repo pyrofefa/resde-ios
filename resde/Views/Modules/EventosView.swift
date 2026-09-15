@@ -16,8 +16,7 @@ struct EventosView: View {
     @State private var displayMonth = Date()
     @State private var isLoading = true
     @State private var showCreateEvento = false
-    @State private var toastMessage = ""
-    @State private var showToast = false
+    @State private var errorAlert: ErrorPeticionMensaje?
     @State private var selectedEvento: Reserva?
 
     var currentMonth: Date {
@@ -52,11 +51,7 @@ struct EventosView: View {
     }
 
     private func mostrarToast(_ mensaje: String) {
-        toastMessage = mensaje
-        showToast = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            showToast = false
-        }
+        errorAlert = ErrorPeticionMensaje(mensaje: mensaje)
     }
 
     var body: some View {
@@ -184,22 +179,6 @@ struct EventosView: View {
             VStack {
                 Spacer()
 
-                if showToast {
-                    HStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundColor(.white)
-                        Text(toastMessage)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                        Spacer()
-                    }
-                    .padding(12)
-                    .background(Color.red)
-                    .cornerRadius(8)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                }
-
                 HStack {
                     Spacer()
                     Button(action: {
@@ -238,6 +217,10 @@ struct EventosView: View {
                 .environmentObject(authService)
                 .presentationDetents([.fraction(0.6), .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $errorAlert) { error in
+            ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: { errorAlert = nil })
+                .presentationDetents([.fraction(0.45)])
         }
         .onAppear {
             displayMonth = Date()
@@ -581,8 +564,7 @@ struct CreateEventoSheet: View {
     @State private var horaFin = Date()
     @State private var descripcion = ""
     @State private var isSubmitting = false
-    @State private var toastMessage = ""
-    @State private var showToast = false
+    @State private var errorAlert: ErrorPeticionMensaje?
     @State private var showResumen = false
     let area: AreaComun
     let fechaPreseleccionada: Date
@@ -614,11 +596,7 @@ struct CreateEventoSheet: View {
     }
 
     private func mostrarToast(_ mensaje: String) {
-        toastMessage = mensaje
-        showToast = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            showToast = false
-        }
+        errorAlert = ErrorPeticionMensaje(mensaje: mensaje)
     }
 
     var body: some View {
@@ -812,21 +790,10 @@ struct CreateEventoSheet: View {
             }
             }
             .background(Color.appBackground)
-
-            if showToast {
-                HStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundColor(.white)
-                    Text(toastMessage)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
-                    Spacer()
-                }
-                .padding(12)
-                .background(Color.red)
-                .cornerRadius(8)
-                .padding(16)
-            }
+        }
+        .sheet(item: $errorAlert) { error in
+            ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: { errorAlert = nil })
+                .presentationDetents([.fraction(0.45)])
         }
         .onAppear {
             let validDate = max(fechaPreseleccionada, fechaMinima)

@@ -10,11 +10,24 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var showPassword = false
+    @State private var errorAlert: ErrorPeticionMensaje?
 
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
 
     var body: some View {
         loginContent
+            .onChange(of: authService.errorMessage) { _, mensaje in
+                if let mensaje = mensaje {
+                    errorAlert = ErrorPeticionMensaje(mensaje: mensaje)
+                }
+            }
+            .sheet(item: $errorAlert) { error in
+                ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: {
+                    errorAlert = nil
+                    authService.errorMessage = nil
+                })
+                .presentationDetents([.fraction(0.45)])
+            }
     }
 
     private var loginContent: some View {
@@ -35,25 +48,6 @@ struct LoginView: View {
             }
             .padding(.top, 24)
             .padding(.horizontal, 24)
-
-            // ERROR MESSAGE
-            if let errorMessage = authService.errorMessage {
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundColor(.red)
-                        Text(errorMessage)
-                            .font(.system(size: 14))
-                            .foregroundColor(.red)
-                        Spacer()
-                    }
-                }
-                .padding(12)
-                .background(Color.red.opacity(0.1))
-                .cornerRadius(8)
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-            }
 
             // FORM
             VStack(spacing: 16) {

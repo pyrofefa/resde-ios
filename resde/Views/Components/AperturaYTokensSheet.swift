@@ -12,6 +12,7 @@ struct AperturaYTokensSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var tab: AperturaTab = .abrirPluma
     @State private var tokenGenerado: ClaveAccesoGenerada?
+    @State private var errorApertura: ErrorPeticionMensaje?
 
     enum AperturaTab {
         case abrirPluma
@@ -56,9 +57,13 @@ struct AperturaYTokensSheet: View {
                 AbrirPlumaTabView(
                     ubicacionId: ubicacionId,
                     authService: authService,
-                    onResultado: { mensaje in
-                        onAperturaResultado(mensaje)
-                        dismiss()
+                    onResultado: { exito, mensaje in
+                        if exito {
+                            onAperturaResultado(mensaje)
+                            dismiss()
+                        } else {
+                            errorApertura = ErrorPeticionMensaje(mensaje: mensaje)
+                        }
                     }
                 )
             } else {
@@ -81,6 +86,10 @@ struct AperturaYTokensSheet: View {
                 dismiss()
             })
             .presentationDetents([.fraction(0.6)])
+        }
+        .sheet(item: $errorApertura) { error in
+            ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: { errorApertura = nil })
+                .presentationDetents([.fraction(0.45)])
         }
     }
 }
@@ -116,7 +125,7 @@ private enum EstadoAperturaBoton {
 private struct AbrirPlumaTabView: View {
     let ubicacionId: Int?
     let authService: AuthService
-    let onResultado: (String) -> Void
+    let onResultado: (Bool, String) -> Void
 
     @State private var estado: EstadoAperturaBoton = .normal
     @State private var isPressing = false
@@ -184,7 +193,7 @@ private struct AbrirPlumaTabView: View {
 
     private func solicitarApertura() async {
         guard let ubicacionId = ubicacionId else {
-            onResultado("No se pudo determinar la ubicación")
+            onResultado(false, "No se pudo determinar la ubicación")
             return
         }
 
@@ -192,7 +201,7 @@ private struct AbrirPlumaTabView: View {
 
         guard let url = URL(string: "https://resde.aseenti.com.mx/api/v1/pluma/abrir") else {
             estado = .normal
-            onResultado("URL inválida")
+            onResultado(false, "URL inválida")
             return
         }
 
@@ -219,17 +228,17 @@ private struct AbrirPlumaTabView: View {
                     ?? "Solicitud de apertura iniciada"
                 estado = .exito
                 try? await Task.sleep(nanoseconds: 900_000_000)
-                onResultado(mensaje)
+                onResultado(true, mensaje)
             } else {
                 let mensaje = (try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data))?.message
                     ?? "No se pudo iniciar la apertura"
                 estado = .normal
-                onResultado(mensaje)
+                onResultado(false, mensaje)
             }
         } catch {
             print("❌ Error al solicitar apertura de pluma: \(error)")
             estado = .normal
-            onResultado("No se pudo iniciar la apertura")
+            onResultado(false, "No se pudo iniciar la apertura")
         }
     }
 }
