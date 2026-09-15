@@ -10,9 +10,13 @@ struct MensualidadesView: View {
     @StateObject private var viewModel = MensualidadesViewModel()
     @EnvironmentObject var authService: AuthService
 
+    private var deudaColor: Color {
+        viewModel.deudaTotalAcumulada <= 0 ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.8, green: 0.2, blue: 0.2)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            ModuleHeader(title: "Estado de Deuda")
+            ModuleHeader(title: "Estado de Deuda", showYear: false)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -44,14 +48,14 @@ struct MensualidadesView: View {
                         VStack(spacing: 8) {
                             Text("DEUDA TOTAL ACUMULADA")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(Color(red: 0.8, green: 0.2, blue: 0.2))
+                                .foregroundColor(deudaColor)
                             Text("$\(String(format: "%.2f", viewModel.deudaTotalAcumulada))")
                                 .font(.system(size: 36, weight: .bold))
-                                .foregroundColor(Color(red: 0.8, green: 0.2, blue: 0.2))
+                                .foregroundColor(deudaColor)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(24)
-                        .background(Color(red: 1, green: 0.95, blue: 0.95))
+                        .background(viewModel.deudaTotalAcumulada <= 0 ? Color(red: 0.9, green: 0.98, blue: 0.9) : Color.redTint)
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
 

@@ -9,6 +9,11 @@ struct HomeView: View {
     @EnvironmentObject var authService: AuthService
     @State private var selectedUbicacion: String = ""
     @State private var showUbicacionMenu = false
+    @State private var showAperturaYTokens = false
+    @State private var showAperturaToast = false
+    @State private var aperturaToastMensaje = ""
+    @State private var showConfirmarLogout = false
+    @State private var showPermisosActualizados = false
 
     var body: some View {
         NavigationStack {
@@ -17,7 +22,10 @@ struct HomeView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    HomeToolbar()
+                    HomeToolbar(
+                        showAperturaYTokens: $showAperturaYTokens,
+                        showConfirmarLogout: $showConfirmarLogout
+                    )
 
                     ScrollView {
                         HomeContent(
@@ -28,6 +36,47 @@ struct HomeView: View {
                     .refreshable {
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
                     }
+                }
+
+                if showConfirmarLogout {
+                    ConfirmarLogoutOverlay(
+                        onCancel: { showConfirmarLogout = false },
+                        onConfirm: {
+                            showConfirmarLogout = false
+                            authService.logout()
+                        }
+                    )
+                }
+
+                if showPermisosActualizados {
+                    PermisosActualizadosOverlay(
+                        onEntendido: {
+                            showPermisosActualizados = false
+                            if let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == selectedUbicacion })?.key
+                                ?? authService.user?.ubicaciones.first?.key {
+                                Task {
+                                    await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
+                                }
+                            }
+                        }
+                    )
+                }
+
+                if showAperturaToast {
+                    VStack {
+                        Spacer()
+                        Text(aperturaToastMensaje)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(Color.black.opacity(0.85))
+                            .cornerRadius(8)
+                            .padding(.bottom, 24)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
                 }
             }
             .onAppear {
@@ -47,8 +96,35 @@ struct HomeView: View {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .permisosActualizados)) { _ in
+                showPermisosActualizados = true
+            }
+            .sheet(isPresented: $showAperturaYTokens) {
+                AperturaYTokensSheet(
+                    ubicacionId: Int(authService.user?.ubicaciones.first?.key ?? ""),
+                    onAperturaResultado: { mensaje in
+                        mostrarAperturaToast(mensaje)
+                    }
+                )
+                .environmentObject(authService)
+                .presentationDetents([.fraction(0.6), .large])
+                .presentationDragIndicator(.hidden)
+            }
         }
     }
+
+    private func mostrarAperturaToast(_ mensaje: String) {
+        aperturaToastMensaje = mensaje
+        withAnimation {
+            showAperturaToast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            withAnimation {
+                showAperturaToast = false
+            }
+        }
+    }
+
 }
 
 // MARK: - HomeContent
@@ -92,6 +168,8 @@ struct HomeContent: View {
 // MARK: - HomeToolbar
 struct HomeToolbar: View {
     @EnvironmentObject var authService: AuthService
+    @Binding var showAperturaYTokens: Bool
+    @Binding var showConfirmarLogout: Bool
 
     var body: some View {
         HStack {
@@ -107,16 +185,121 @@ struct HomeToolbar: View {
 
             Spacer()
 
-            Button(action: {
-                authService.logout()
-            }) {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
+            HStack(spacing: 20) {
+                Button(action: {
+                    showAperturaYTokens = true
+                }) {
+                    Image(systemName: "key.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white)
+                }
+
+                Button(action: {
+                    showConfirmarLogout = true
+                }) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white)
+                }
             }
         }
         .padding(16)
         .background(Color(red: 0.05, green: 0.2, blue: 0.35))
+    }
+}
+
+struct AperturaPlumaResponse: Codable {
+    let status: String?
+    let message: String?
+    let call_id: String?
+}
+
+struct ConfirmarLogoutOverlay: View {
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture { onCancel() }
+
+            VStack(alignment: .leading, spacing: 16) {
+                Image("logoApp")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 44)
+                    .cornerRadius(10)
+
+                Text("Cerrar sesión")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Text("¿Seguro que quieres cerrar sesión?")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Spacer()
+                    Button(action: onCancel) {
+                        Text("Cancelar")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    .padding(.trailing, 16)
+
+                    Button(action: onConfirm) {
+                        Text("Cerrar sesión")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.cardBackground)
+            .cornerRadius(12)
+            .frame(maxWidth: 320)
+            .padding(.horizontal, 32)
+        }
+    }
+}
+
+struct PermisosActualizadosOverlay: View {
+    let onEntendido: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 16) {
+                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(.blue)
+
+                Text("Permisos actualizados")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Text("Se han actualizado tus permisos y accesos en el sistema. Refrescando inicio...")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Spacer()
+                    Button(action: onEntendido) {
+                        Text("Entendido")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.blue)
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.cardBackground)
+            .cornerRadius(12)
+            .frame(maxWidth: 320)
+            .padding(.horizontal, 32)
+        }
     }
 }
 
@@ -268,16 +451,20 @@ struct InfoCarousel: View {
 
         var items: [CarouselItem] = []
 
-        let cuotaMonto = authService.carouselData.estadoAdeudos?.data?.cuotaActualMonto ?? 0
-        let cuotaLabel = authService.carouselData.estadoAdeudos?.data?.cuotaSub ?? "Enero – Agosto sin ningún pago registrado ($1,200)."
+        let estadoAdeudos = authService.carouselData.estadoAdeudos?.data
+        let alCorriente = (estadoAdeudos?.saldoPendiente ?? 0) <= 0
+        let cuotaMonto = estadoAdeudos?.cuotaActualMonto ?? 0
+        let cuotaLabel = estadoAdeudos?.cuotaSub ?? "Enero – Agosto sin ningún pago registrado ($1,200)."
+        let cuotaTitulo = estadoAdeudos?.cuotaActualLabel?.uppercased()
+            ?? "CUOTA DE \((estadoAdeudos?.cuotaActual?.mes ?? "").uppercased())"
         items.append(CarouselItem(
             id: 0,
-            title: "CUOTA DE AGOSTO",
+            title: cuotaTitulo,
             value: String(format: "$%.2f", cuotaMonto),
-            subtitle: "Por pagar",
+            subtitle: alCorriente ? "" : "Por pagar",
             description: cuotaLabel,
-            backgroundColor: Color(red: 1, green: 0.95, blue: 0.95),
-            titleColor: Color(red: 0.9, green: 0.2, blue: 0.2)
+            backgroundColor: alCorriente ? Color(red: 0.9, green: 0.98, blue: 0.9) : Color.redTint,
+            titleColor: alCorriente ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.9, green: 0.2, blue: 0.2)
         ))
 
         items.append(CarouselItem(
@@ -398,9 +585,11 @@ struct CarouselItemCard: View {
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(item.titleColor)
 
-            Text(item.subtitle)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(item.titleColor)
+            if !item.subtitle.isEmpty {
+                Text(item.subtitle)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(item.titleColor)
+            }
 
             Text(item.description)
                 .font(.system(size: 11))
@@ -481,7 +670,7 @@ struct ResumenCards: View {
     let estadoAdeudos: EstadoAdeudosResponse?
 
     var body: some View {
-        let validado = estadoAdeudos?.data?.montoValidadoAnio ?? 0
+        let validado = estadoAdeudos?.data?.validadoMonto ?? estadoAdeudos?.data?.montoValidadoAnio ?? 0
         let parcial = estadoAdeudos?.data?.montoParcial ?? 0
         let pendiente = estadoAdeudos?.data?.montoPendiente ?? 0
         let faltante = estadoAdeudos?.data?.montoFaltante ?? 0
@@ -495,7 +684,7 @@ struct ResumenCards: View {
                 ResumenCardItem(
                     title: "VALIDADO",
                     amount: String(format: "$%.2f", validado),
-                    subtitle: "\(validadoCount) meses cubiertos",
+                    subtitle: estadoAdeudos?.data?.validadoLabel ?? "\(validadoCount) meses cubiertos",
                     backgroundColor: Color(red: 0.9, green: 0.98, blue: 0.9),
                     titleColor: Color(red: 0.2, green: 0.7, blue: 0.2)
                 )
@@ -503,7 +692,7 @@ struct ResumenCards: View {
                 ResumenCardItem(
                     title: "PARCIAL",
                     amount: String(format: "$%.2f", parcial),
-                    subtitle: "\(parcialCount) meses incompletos",
+                    subtitle: estadoAdeudos?.data?.parcialLabel ?? "\(parcialCount) meses incompletos",
                     backgroundColor: Color(red: 0.98, green: 0.94, blue: 0.88),
                     titleColor: Color(red: 1, green: 0.65, blue: 0)
                 )
@@ -513,7 +702,7 @@ struct ResumenCards: View {
                 ResumenCardItem(
                     title: "PENDIENTE DE VALIDAR",
                     amount: String(format: "$%.2f", pendiente),
-                    subtitle: "\(pendienteCount) meses sin validar",
+                    subtitle: estadoAdeudos?.data?.pendienteLabel ?? "\(pendienteCount) meses sin validar",
                     backgroundColor: Color(red: 1, green: 0.98, blue: 0.88),
                     titleColor: Color(red: 1, green: 0.8, blue: 0)
                 )
@@ -521,7 +710,7 @@ struct ResumenCards: View {
                 ResumenCardItem(
                     title: "SIN PAGO",
                     amount: String(format: "$%.2f", faltante),
-                    subtitle: "\(faltanteCount) meses sin registrar",
+                    subtitle: estadoAdeudos?.data?.faltanteLabel ?? "\(faltanteCount) meses sin registrar",
                     backgroundColor: Color(red: 1, green: 0.9, blue: 0.9),
                     titleColor: Color(red: 0.9, green: 0.2, blue: 0.2)
                 )
@@ -570,13 +759,17 @@ struct PanoramaSection: View {
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
 
-            PanoramaContent(mesesDetalle: authService.carouselData.estadoAdeudos?.data?.mesesDetalle ?? [])
+            PanoramaContent(
+                mesesDetalle: authService.carouselData.estadoAdeudos?.data?.mesesDetalle ?? [],
+                cuotaSub: authService.carouselData.estadoAdeudos?.data?.cuotaSub
+            )
         }
     }
 }
 
 struct PanoramaContent: View {
     let mesesDetalle: [MesDetalle]
+    let cuotaSub: String?
     let months = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
 
     func colorForStatus(_ status: String?) -> Color {
@@ -598,7 +791,7 @@ struct PanoramaContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(mesesDetalle.first?.tooltip ?? "Enero – Agosto sin ningún pago registrado ($1,200).")
+            Text(cuotaSub ?? "Enero – Agosto sin ningún pago registrado ($1,200).")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
 
@@ -661,7 +854,8 @@ struct ModulesSection: View {
                 permissions: permissions,
                 modules: [
                     ("evento.manage", "Eventos", "calendar"),
-                    ("queja.manage", "Quejas", "exclamationmark.bubble.fill")
+                    ("queja.manage", "Quejas", "exclamationmark.bubble.fill"),
+                    (nil, "Reglamentos", "book.closed.fill")
                 ]
             )
 
@@ -669,7 +863,9 @@ struct ModulesSection: View {
                 title: "ACCESOS",
                 permissions: permissions,
                 modules: [
-                    ("tarjetas.manage", "Tarjetas de acceso", "wifi.router.fill")
+                    ("tarjetas.manage", "Tarjetas de acceso", "wifi.router.fill"),
+                    (nil, "Claves de acceso", "key.fill"),
+                    (nil, "Historial de accesos", "clock.arrow.circlepath")
                 ]
             )
         }
@@ -701,6 +897,12 @@ struct ModulesSection: View {
             QuejasView()
         case "Tarjetas de acceso":
             TarjetasView()
+        case "Claves de acceso":
+            ClavesAccesoView()
+        case "Historial de accesos":
+            HistorialAccesosView()
+        case "Reglamentos":
+            ReglamentosView()
         default:
             PagosView()
         }
@@ -710,11 +912,11 @@ struct ModulesSection: View {
 struct ModuleSectionGroup: View {
     let title: String
     let permissions: [String]
-    let modules: [(permission: String, title: String, icon: String)]
+    let modules: [(permission: String?, title: String, icon: String)]
 
     var visibleModules: [(String, String)] {
         modules.compactMap { module in
-            if permissions.contains(module.permission) {
+            if module.permission == nil || permissions.contains(module.permission!) {
                 return (module.title, module.icon)
             }
             return nil

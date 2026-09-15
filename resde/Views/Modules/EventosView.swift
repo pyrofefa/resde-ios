@@ -16,8 +16,8 @@ struct EventosView: View {
     @State private var displayMonth = Date()
     @State private var isLoading = true
     @State private var showCreateEvento = false
-    @State private var toastMessage = ""
-    @State private var showToast = false
+    @State private var errorAlert: ErrorPeticionMensaje?
+    @State private var selectedEvento: Reserva?
 
     var currentMonth: Date {
         Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: displayMonth)) ?? Date()
@@ -40,8 +40,18 @@ struct EventosView: View {
         return misReservas.filter { String($0.fecha_inicio?.prefix(10) ?? "") == selectedDateString }
     }
 
+    var fechaSeleccionadaOcupada: Bool {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return diasApartados.contains(formatter.string(from: selectedDate))
+    }
+
     var fechaMinima: Date {
         Date().addingTimeInterval(36 * 3600)
+    }
+
+    private func mostrarToast(_ mensaje: String) {
+        errorAlert = ErrorPeticionMensaje(mensaje: mensaje)
     }
 
     var body: some View {
@@ -104,13 +114,13 @@ struct EventosView: View {
                                     .foregroundColor(.primary)
                                 Spacer()
                                 Button(action: { changeMonth(by: -1) }) {
-                                    Image(systemName: "backward.fill")
-                                        .font(.system(size: 16))
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.blue)
                                 }
                                 Button(action: { changeMonth(by: 1) }) {
-                                    Image(systemName: "forward.fill")
-                                        .font(.system(size: 16))
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.blue)
                                 }
                             }
@@ -123,11 +133,7 @@ struct EventosView: View {
                                 firstWeekday: firstWeekday,
                                 fechaMinimaReference: fechaMinima,
                                 onInvalidDate: {
-                                    toastMessage = "La reserva debe ser con mínimo 36 horas de anticipación"
-                                    showToast = true
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                                        showToast = false
-                                    }
+                                    mostrarToast("La reserva debe ser con mínimo 36 horas de anticipación")
                                 }
                             )
                         }
@@ -154,7 +160,10 @@ struct EventosView: View {
                             } else {
                                 VStack(spacing: 12) {
                                     ForEach(eventosDelDia, id: \.id) { evento in
-                                        EventoCard(evento: evento)
+                                        Button(action: { selectedEvento = evento }) {
+                                            EventoCard(evento: evento)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
@@ -168,26 +177,16 @@ struct EventosView: View {
             .navigationBarBackButtonHidden()
 
             VStack {
-                if showToast {
-                    HStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundColor(.white)
-                        Text(toastMessage)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                        Spacer()
-                    }
-                    .padding(12)
-                    .background(Color.red)
-                    .cornerRadius(8)
-                    .padding(16)
-                }
-
                 Spacer()
+
                 HStack {
                     Spacer()
                     Button(action: {
-                        showCreateEvento = true
+                        if fechaSeleccionadaOcupada {
+                            mostrarToast("La fecha seleccionada no está disponible para una nueva reserva")
+                        } else {
+                            showCreateEvento = true
+                        }
                     }) {
                         Image(systemName: "plus")
                             .font(.system(size: 20, weight: .semibold))
@@ -212,6 +211,16 @@ struct EventosView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+        }
+        .sheet(item: $selectedEvento) { evento in
+            DetalleReservaSheet(evento: evento)
+                .environmentObject(authService)
+                .presentationDetents([.fraction(0.6), .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $errorAlert) { error in
+            ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: { errorAlert = nil })
+                .presentationDetents([.fraction(0.45)])
         }
         .onAppear {
             displayMonth = Date()
@@ -276,7 +285,8 @@ struct EventosView: View {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             return data
         } catch {
             print("❌ Error fetching áreas: \(error)")
@@ -295,7 +305,8 @@ struct EventosView: View {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             return data
         } catch {
             print("❌ Error fetching reservas: \(error)")
@@ -383,12 +394,12 @@ struct CalendarDayCell: View {
                 Button(action: {
                     if isTooSoon {
                         onInvalidDate()
-                    } else if !isOccupied {
+                    } else {
                         selectedDate = dayDate
                         displayMonth = dayDate
                     }
                 }) {
-                    DayCellContent(dayNum: dayNum, isSelected: isSelected, isDisabled: isDisabled)
+                    DayCellContent(dayNum: dayNum, isSelected: isSelected, isOccupied: isOccupied, isTooSoon: isTooSoon)
                 }
                 .disabled(false)
             )
@@ -405,19 +416,32 @@ struct CalendarDayCell: View {
 struct DayCellContent: View {
     let dayNum: Int
     let isSelected: Bool
-    let isDisabled: Bool
+    let isOccupied: Bool
+    let isTooSoon: Bool
+
+    private var backgroundColor: Color {
+        if isOccupied { return Color.red }
+        if isSelected { return Color.blue }
+        return Color.clear
+    }
+
+    private var textColor: Color {
+        if isOccupied || isSelected { return .white }
+        if isTooSoon { return .gray }
+        return .primary
+    }
 
     var body: some View {
         Text(String(dayNum))
             .font(.system(size: 14, weight: .medium))
-            .foregroundColor(isDisabled ? .gray : .primary)
+            .foregroundColor(textColor)
             .frame(maxWidth: .infinity)
             .frame(height: 36)
-            .background(isSelected ? Color.blue : Color.clear)
+            .background(backgroundColor)
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                    .stroke(isSelected && !isOccupied ? Color.blue : Color.clear, lineWidth: 2)
             )
     }
 }
@@ -425,19 +449,46 @@ struct DayCellContent: View {
 struct EventoCard: View {
     let evento: Reserva
 
+    private var estatusTexto: String {
+        evento.adeudo_evento?.estatus_pago?.descripcion ?? "Pendiente"
+    }
+
+    private var estatusColor: Color {
+        switch estatusTexto.lowercased() {
+        case "pagado":
+            return Color(red: 0.2, green: 0.7, blue: 0.2)
+        case "pendiente":
+            return Color(red: 0.9, green: 0.6, blue: 0.1)
+        default:
+            return .secondary
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(evento.titulo ?? "Evento")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.primary)
-                    Text("\(evento.hora_inicio ?? "")  - \(evento.hora_fin ?? "")")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
+                    if let areaNombre = evento.area_comun_nombre {
+                        Text(areaNombre)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
                 }
                 Spacer()
+                Text(estatusTexto.uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(estatusColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(estatusColor.opacity(0.15))
+                    .cornerRadius(12)
             }
+            Text("\(evento.hora_inicio ?? "")  - \(evento.hora_fin ?? "")")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.secondary)
         }
         .padding(12)
         .background(Color.cardBackground)
@@ -452,6 +503,12 @@ struct AreaComun: Codable, Identifiable {
     let descripcion: String?
     let horario_apertura: String?
     let horario_cierre: String?
+    let limite_personas: Int?
+    let cuota_por_uso: String?
+
+    var cuotaPorUsoValor: Double {
+        Double(cuota_por_uso ?? "") ?? 0
+    }
 }
 
 struct Reserva: Codable, Identifiable {
@@ -462,6 +519,22 @@ struct Reserva: Codable, Identifiable {
     let hora_inicio: String?
     let hora_fin: String?
     let descripcion: String?
+    let area_comun_nombre: String?
+    let adeudo_evento: AdeudoEvento?
+    let reserva_residente: ReservaResidente?
+}
+
+struct AdeudoEvento: Codable {
+    let estatus_pago: EstatusPago?
+}
+
+struct EstatusPago: Codable {
+    let id: Int?
+    let descripcion: String?
+}
+
+struct ReservaResidente: Codable {
+    let nombre_completo: String?
 }
 
 struct AreasComunesResponse: Codable {
@@ -476,6 +549,11 @@ struct ReservasResponse: Codable {
     let mis_reservas: [Reserva]?
 }
 
+struct EventoErrorResponse: Codable {
+    let success: Bool?
+    let message: String?
+}
+
 struct CreateEventoSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authService: AuthService
@@ -486,9 +564,19 @@ struct CreateEventoSheet: View {
     @State private var horaFin = Date()
     @State private var descripcion = ""
     @State private var isSubmitting = false
+    @State private var errorAlert: ErrorPeticionMensaje?
+    @State private var showResumen = false
     let area: AreaComun
     let fechaPreseleccionada: Date
     let onEventoCreated: () -> Void
+
+    var ubicacionTexto: String {
+        authService.user?.ubicaciones.first?.value ?? "N/A"
+    }
+
+    var residenteTexto: String {
+        "\(authService.user?.first_name ?? "") \(authService.user?.last_name ?? "")"
+    }
 
     var is36HorasValido: Bool {
         let hoursInFuture = fechaEvento.timeIntervalSince(Date()) / 3600
@@ -499,7 +587,20 @@ struct CreateEventoSheet: View {
         Date().addingTimeInterval(36 * 3600)
     }
 
+    var duracionEnHoras: Double {
+        horaFin.timeIntervalSince(horaInicio) / 3600
+    }
+
+    var duracionValida: Bool {
+        duracionEnHoras > 0 && duracionEnHoras <= 5
+    }
+
+    private func mostrarToast(_ mensaje: String) {
+        errorAlert = ErrorPeticionMensaje(mensaje: mensaje)
+    }
+
     var body: some View {
+        ZStack(alignment: .top) {
         VStack(spacing: 0) {
             HStack {
                 Image(systemName: "calendar")
@@ -569,10 +670,10 @@ struct CreateEventoSheet: View {
                                 .cornerRadius(8)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Juan Rulfo #11")
+                                Text(ubicacionTexto)
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
-                                Text(authService.user?.first_name ?? "" + " " + (authService.user?.last_name ?? ""))
+                                Text(residenteTexto)
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.secondary)
                             }
@@ -626,6 +727,9 @@ struct CreateEventoSheet: View {
 
                                 DatePicker("", selection: $horaInicio, displayedComponents: .hourAndMinute)
                                     .datePickerStyle(.compact)
+                                    .onChange(of: horaInicio) { _, nuevoInicio in
+                                        horaFin = nuevoInicio.addingTimeInterval(5 * 3600)
+                                    }
                             }
 
                             VStack(alignment: .leading, spacing: 8) {
@@ -638,7 +742,7 @@ struct CreateEventoSheet: View {
                             }
                         }
 
-                        Text("Las reservas requieren un mínimo de 36 horas de anticipación.")
+                        Text("Las reservas requieren un mínimo de 36 horas de anticipación. La duración máxima de un evento es de 5 horas.")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.secondary)
                     }
@@ -663,10 +767,11 @@ struct CreateEventoSheet: View {
                     }
 
                     Button(action: {
-                        isSubmitting = true
-                        Task {
-                            await createEvento()
+                        guard duracionValida else {
+                            mostrarToast("La duración máxima de un evento es de 5 horas")
+                            return
                         }
+                        showResumen = true
                     }) {
                         HStack(spacing: 8) {
                             Image(systemName: "doc.text.fill")
@@ -685,15 +790,43 @@ struct CreateEventoSheet: View {
             }
             }
             .background(Color.appBackground)
+        }
+        .sheet(item: $errorAlert) { error in
+            ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: { errorAlert = nil })
+                .presentationDetents([.fraction(0.45)])
+        }
         .onAppear {
             let validDate = max(fechaPreseleccionada, fechaMinima)
             fechaEvento = validDate
+            horaFin = horaInicio.addingTimeInterval(5 * 3600)
+        }
+        .sheet(isPresented: $showResumen) {
+            ResumenReservaSheet(
+                area: area,
+                ubicacionTexto: ubicacionTexto,
+                fecha: fechaEvento,
+                horaInicio: horaInicio,
+                horaFin: horaFin,
+                tituloEvento: tituloEvento,
+                descripcion: descripcion,
+                onConfirm: {
+                    isSubmitting = true
+                    Task {
+                        await createEvento()
+                    }
+                }
+            )
+            .presentationDetents([.fraction(0.6)])
+            .presentationDragIndicator(.visible)
         }
     }
 
     private func createEvento() async {
-        guard let ubicacionId = authService.user?.ubicaciones.first?.key else {
+        guard let ubicacionIdStr = authService.user?.ubicaciones.first?.key,
+              let ubicacionId = Int(ubicacionIdStr) else {
             isSubmitting = false
+            showResumen = false
+            mostrarToast("No se pudo determinar la ubicación")
             return
         }
 
@@ -708,6 +841,8 @@ struct CreateEventoSheet: View {
 
         guard let url = URL(string: "https://resde.aseenti.com.mx/api/v1/eventos") else {
             isSubmitting = false
+            showResumen = false
+            mostrarToast("URL inválida")
             return
         }
 
@@ -730,19 +865,277 @@ struct CreateEventoSheet: View {
             let jsonData = try JSONSerialization.data(withJSONObject: params)
             request.httpBody = jsonData
 
-            let (_, response) = try await URLSession.shared.data(for: request)
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+            if statusCode >= 200 && statusCode < 300 {
                 await MainActor.run {
                     isSubmitting = false
                     onEventoCreated()
                     dismiss()
+                }
+            } else {
+                let mensaje = (try? JSONDecoder().decode(EventoErrorResponse.self, from: data))?.message
+                    ?? "No se pudo guardar la reservación"
+                print("❌ Error del servidor al crear evento (\(statusCode)): \(mensaje)")
+                await MainActor.run {
+                    isSubmitting = false
+                    showResumen = false
+                    mostrarToast(mensaje)
                 }
             }
         } catch {
             print("❌ Error creating evento: \(error)")
             await MainActor.run {
                 isSubmitting = false
+                showResumen = false
+                mostrarToast("No se pudo guardar la reservación")
             }
+        }
+    }
+}
+
+struct ResumenReservaSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let area: AreaComun
+    let ubicacionTexto: String
+    let fecha: Date
+    let horaInicio: Date
+    let horaFin: Date
+    let tituloEvento: String
+    let descripcion: String
+    let onConfirm: () -> Void
+
+    private var fechaStr: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd/MM/yyyy"
+        return formatter.string(from: fecha)
+    }
+
+    private var horarioStr: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return "\(formatter.string(from: horaInicio)) - \(formatter.string(from: horaFin))"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 40, height: 5)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Color(red: 0.0, green: 0.4, blue: 0.7))
+                    .cornerRadius(10)
+                Text("Resumen de Reserva")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+
+            ScrollView {
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "house.fill")
+                                .foregroundColor(.green)
+                            Text(area.nombre ?? "")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.green)
+                        }
+
+                        HStack(alignment: .top) {
+                            ResumenCampo(label: "Apertura", value: area.horario_apertura ?? "N/A")
+                            ResumenCampo(label: "Cierre", value: area.horario_cierre ?? "N/A")
+                            ResumenCampo(label: "Capacidad", value: area.limite_personas.map { "\($0)" } ?? "N/A")
+                            ResumenCampo(label: "Costo", value: "$\(String(format: "%.2f", area.cuotaPorUsoValor))")
+                        }
+                    }
+                    .padding(16)
+                    .background(Color.greenTint)
+                    .cornerRadius(12)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .top) {
+                            ResumenCampo(label: "Ubicación", value: ubicacionTexto, bold: true)
+                            ResumenCampo(label: "Fecha", value: fechaStr, bold: true)
+                        }
+                        HStack(alignment: .top) {
+                            ResumenCampo(label: "Horario", value: horarioStr, bold: true)
+                            ResumenCampo(label: "Evento", value: tituloEvento.isEmpty ? "Evento Privado" : tituloEvento, bold: true)
+                        }
+                        if !descripcion.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Detalles adicionales")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Text(descripcion)
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundColor(.primary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(16)
+                    .background(Color.selectedTint)
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal, 16)
+            }
+
+            VStack(spacing: 12) {
+                Button(action: { onConfirm() }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Confirmar y Enviar")
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(Color(red: 0.0, green: 0.4, blue: 0.7))
+                    .cornerRadius(12)
+                }
+
+                Button(action: { dismiss() }) {
+                    Text("Volver a editar")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(12)
+                        .background(Color.selectedTint)
+                        .cornerRadius(12)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.appBackground)
+    }
+}
+
+struct ResumenCampo: View {
+    let label: String
+    let value: String
+    var bold: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.system(size: 15, weight: bold ? .bold : .semibold))
+                .foregroundColor(.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct DetalleReservaSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var authService: AuthService
+    let evento: Reserva
+
+    private var estatusTexto: String {
+        evento.adeudo_evento?.estatus_pago?.descripcion ?? "Pendiente"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 40, height: 5)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+
+            HStack {
+                Text("Detalle de la Reserva")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(evento.titulo ?? "Evento")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.primary)
+                        if let areaNombre = evento.area_comun_nombre {
+                            Text(areaNombre)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.blue)
+                        }
+                    }
+
+                    Divider()
+
+                    VStack(spacing: 12) {
+                        DetalleFila(label: "Fecha", value: evento.fecha_inicio ?? "N/A")
+                        DetalleFila(label: "Horario", value: "\(evento.hora_inicio ?? "")  - \(evento.hora_fin ?? "")")
+                        DetalleFila(label: "Ubicación", value: authService.user?.ubicaciones.first?.value ?? "N/A", boldValue: true)
+                        DetalleFila(label: "Residente", value: evento.reserva_residente?.nombre_completo ?? "N/A")
+                        DetalleFila(label: "Estatus Pago", value: estatusTexto, boldValue: true)
+                    }
+
+                    if let descripcion = evento.descripcion, !descripcion.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Descripción")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.primary)
+                            Text(descripcion)
+                                .font(.system(size: 15))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color.blueTint)
+                .cornerRadius(12)
+                .padding(.horizontal, 16)
+            }
+
+            Button(action: { dismiss() }) {
+                Text("Cerrar")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(Color.selectedTint)
+                    .cornerRadius(12)
+            }
+            .padding(16)
+        }
+        .background(Color.appBackground)
+    }
+}
+
+struct DetalleFila: View {
+    let label: String
+    let value: String
+    var boldValue: Bool = false
+
+    var body: some View {
+        HStack(alignment: .top) {
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 15, weight: boldValue ? .bold : .semibold))
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.trailing)
         }
     }
 }

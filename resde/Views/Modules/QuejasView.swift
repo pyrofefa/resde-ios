@@ -14,6 +14,7 @@ struct QuejasView: View {
     @State private var quejas: [Queja] = []
     @State private var isLoading = true
     @State private var showCreateQueja = false
+    @State private var showSuccessToast = false
 
     var body: some View {
         ZStack {
@@ -82,6 +83,9 @@ struct QuejasView: View {
 
             VStack {
                 Spacer()
+                if showSuccessToast {
+                    SuccessToast(message: "Queja registrada correctamente")
+                }
                 HStack {
                     Spacer()
                     Button(action: {
@@ -101,6 +105,11 @@ struct QuejasView: View {
         .sheet(isPresented: $showCreateQueja) {
             CreateQuejaSheet(isPresented: $showCreateQueja, ubicacion: selectedUbicacion, onQuejaCreated: {
                 loadQuejas()
+                showSuccessToast = true
+                Task {
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    showSuccessToast = false
+                }
             })
                 .environmentObject(authService)
                 .presentationDetents([.large])
@@ -146,6 +155,7 @@ struct QuejasView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Status code: \(httpResponse.statusCode)")
             }
@@ -395,8 +405,13 @@ struct CreateQuejaSheet: View {
                         }
                     }) {
                         HStack(spacing: 8) {
-                            Image(systemName: "doc.text.fill")
-                            Text("Registrar Queja")
+                            if isSubmitting {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "doc.text.fill")
+                            }
+                            Text(isSubmitting ? "Registrando..." : "Registrar Queja")
                         }
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
@@ -451,7 +466,8 @@ struct CreateQuejaSheet: View {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             return data
         } catch {
             print("❌ Error fetching tipos: \(error)")
@@ -515,6 +531,7 @@ struct CreateQuejaSheet: View {
 
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
                 await MainActor.run {
                     isSubmitting = false

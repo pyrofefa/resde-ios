@@ -24,15 +24,21 @@ struct EstadoAdeudosData: Codable {
     let cuotaActual: CuotaActual?
     let saldoPendiente: Double?
     let montoValidadoAnio: Double?
+    let validadoMonto: Double?
     let montoParcial: Double?
     let montoPendiente: Double?
     let montoFaltante: Double?
     let cuotaActualMonto: Double?
     let cuotaSub: String?
+    let cuotaActualLabel: String?
     let cuotasValidadasCount: Int?
     let cuotasParcialesCount: Int?
     let cuotasPendientesCount: Int?
     let cuotasFaltantesCount: Int?
+    let validadoLabel: String?
+    let parcialLabel: String?
+    let pendienteLabel: String?
+    let faltanteLabel: String?
     let mesesDetalle: [MesDetalle]?
 }
 
