@@ -9,6 +9,8 @@ class VehiculosViewModel: ObservableObject {
     @Published var isSaving = false
     @Published var errorMessage = ""
     @Published var showError = false
+    @Published var showSuccessToast = false
+    @Published var successMessage = ""
 
     private let authService: AuthService
 
@@ -130,6 +132,12 @@ class VehiculosViewModel: ObservableObject {
             }
 
             isSaving = false
+            successMessage = "Vehículos guardados correctamente"
+            showSuccessToast = true
+            Task {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                showSuccessToast = false
+            }
         } catch {
             print("❌ Error al guardar vehículos: \(error)")
             errorMessage = "Error: \(error.localizedDescription)"

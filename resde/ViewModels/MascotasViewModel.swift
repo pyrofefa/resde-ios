@@ -10,6 +10,8 @@ class MascotasViewModel: ObservableObject {
     @Published var isSaving = false
     @Published var errorMessage = ""
     @Published var showError = false
+    @Published var showSuccessToast = false
+    @Published var successMessage = ""
 
     private let authService: AuthService
 
@@ -108,6 +110,12 @@ class MascotasViewModel: ObservableObject {
             }
 
             isSaving = false
+            successMessage = "Mascotas guardadas correctamente"
+            showSuccessToast = true
+            Task {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                showSuccessToast = false
+            }
         } catch {
             print("❌ Error al guardar mascotas: \(error)")
             errorMessage = "Error: \(error.localizedDescription)"

@@ -14,6 +14,7 @@ struct QuejasView: View {
     @State private var quejas: [Queja] = []
     @State private var isLoading = true
     @State private var showCreateQueja = false
+    @State private var showSuccessToast = false
 
     var body: some View {
         ZStack {
@@ -82,6 +83,9 @@ struct QuejasView: View {
 
             VStack {
                 Spacer()
+                if showSuccessToast {
+                    SuccessToast(message: "Queja registrada correctamente")
+                }
                 HStack {
                     Spacer()
                     Button(action: {
@@ -101,6 +105,11 @@ struct QuejasView: View {
         .sheet(isPresented: $showCreateQueja) {
             CreateQuejaSheet(isPresented: $showCreateQueja, ubicacion: selectedUbicacion, onQuejaCreated: {
                 loadQuejas()
+                showSuccessToast = true
+                Task {
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    showSuccessToast = false
+                }
             })
                 .environmentObject(authService)
                 .presentationDetents([.large])
@@ -396,8 +405,13 @@ struct CreateQuejaSheet: View {
                         }
                     }) {
                         HStack(spacing: 8) {
-                            Image(systemName: "doc.text.fill")
-                            Text("Registrar Queja")
+                            if isSubmitting {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "doc.text.fill")
+                            }
+                            Text(isSubmitting ? "Registrando..." : "Registrar Queja")
                         }
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
