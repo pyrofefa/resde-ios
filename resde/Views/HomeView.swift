@@ -13,6 +13,7 @@ struct HomeView: View {
     @State private var showAperturaToast = false
     @State private var aperturaToastMensaje = ""
     @State private var showConfirmarLogout = false
+    @State private var showPermisosActualizados = false
 
     var body: some View {
         NavigationStack {
@@ -43,6 +44,20 @@ struct HomeView: View {
                         onConfirm: {
                             showConfirmarLogout = false
                             authService.logout()
+                        }
+                    )
+                }
+
+                if showPermisosActualizados {
+                    PermisosActualizadosOverlay(
+                        onEntendido: {
+                            showPermisosActualizados = false
+                            if let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == selectedUbicacion })?.key
+                                ?? authService.user?.ubicaciones.first?.key {
+                                Task {
+                                    await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
+                                }
+                            }
                         }
                     )
                 }
@@ -80,6 +95,9 @@ struct HomeView: View {
                         await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                     }
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .permisosActualizados)) { _ in
+                showPermisosActualizados = true
             }
             .sheet(isPresented: $showAperturaYTokens) {
                 AperturaYTokensSheet(
@@ -234,6 +252,45 @@ struct ConfirmarLogoutOverlay: View {
                         Text("Cerrar sesión")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.red)
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.cardBackground)
+            .cornerRadius(12)
+            .frame(maxWidth: 320)
+            .padding(.horizontal, 32)
+        }
+    }
+}
+
+struct PermisosActualizadosOverlay: View {
+    let onEntendido: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 16) {
+                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(.blue)
+
+                Text("Permisos actualizados")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Text("Se han actualizado tus permisos y accesos en el sistema. Refrescando inicio...")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Spacer()
+                    Button(action: onEntendido) {
+                        Text("Entendido")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.blue)
                     }
                 }
             }

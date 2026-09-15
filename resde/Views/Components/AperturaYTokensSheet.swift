@@ -245,11 +245,27 @@ private struct GenerarCodigoTabView: View {
     @State private var tipoAcceso: TipoAccesoOpcion = .visita
     @State private var vigenciaHoras = 24
     @State private var limiteUsos = 1
+    @State private var fechaEvento = Date()
     @State private var isSubmitting = false
     @State private var errorPeticion: ErrorPeticionMensaje?
 
-    private let opcionesVigencia = [1, 4, 12, 24, 48, 72, 168]
-    private let opcionesLimite = [1, 3, 5, 10, 25]
+    private let opcionesVigencia = [3, 6, 12, 24]
+    private let opcionesLimite = [1, 2, 0]
+    private let diasMaximosEvento = 15
+
+    private var fechaMaximaEvento: Date {
+        Calendar.current.date(byAdding: .day, value: diasMaximosEvento, to: Date()) ?? Date()
+    }
+
+    private var etiquetaFechaEvento: String {
+        if Calendar.current.isDateInToday(fechaEvento) {
+            return "Hoy"
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_MX")
+        formatter.dateFormat = "d 'de' MMMM"
+        return formatter.string(from: fechaEvento)
+    }
 
     var body: some View {
         ScrollView {
@@ -275,15 +291,70 @@ private struct GenerarCodigoTabView: View {
                     }
                 }
 
-                CampoSelector(label: "Vigencia", valor: etiquetaVigencia(vigenciaHoras)) {
-                    ForEach(opcionesVigencia, id: \.self) { horas in
-                        Button(etiquetaVigencia(horas)) { vigenciaHoras = horas }
+                switch tipoAcceso {
+                case .paqueteria:
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("📦")
+                        Text("Paquetería: Configurado automáticamente con 1 solo uso y vigencia de 12 horas.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                     }
-                }
+                    .padding(10)
+                    .background(Color.blue.opacity(0.08))
+                    .cornerRadius(8)
 
-                CampoSelector(label: "Límite de usos", valor: etiquetaLimite(limiteUsos)) {
-                    ForEach(opcionesLimite, id: \.self) { limite in
-                        Button(etiquetaLimite(limite)) { limiteUsos = limite }
+                case .reunion:
+                    ZStack {
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundColor(.blue)
+                            Text("Fecha del evento: \(etiquetaFechaEvento)")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.blue)
+                            Spacer()
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.fieldBackground)
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                        .allowsHitTesting(false)
+
+                        DatePicker(
+                            "",
+                            selection: $fechaEvento,
+                            in: Date()...fechaMaximaEvento,
+                            displayedComponents: [.date]
+                        )
+                        .labelsHidden()
+                        .datePickerStyle(.compact)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .opacity(0.02)
+                    }
+                    .frame(height: 44)
+
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("🎉")
+                        Text("Reunión / Evento: Usos ilimitados durante el día seleccionado (hasta \(diasMaximosEvento) días a futuro).")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(10)
+                    .background(Color.blue.opacity(0.08))
+                    .cornerRadius(8)
+
+                case .visita:
+                    CampoSelector(label: "Vigencia", valor: etiquetaVigencia(vigenciaHoras)) {
+                        ForEach(opcionesVigencia, id: \.self) { horas in
+                            Button(etiquetaVigencia(horas)) { vigenciaHoras = horas }
+                        }
+                    }
+
+                    CampoSelector(label: "Límite de usos", valor: etiquetaLimite(limiteUsos)) {
+                        ForEach(opcionesLimite, id: \.self) { limite in
+                            Button(etiquetaLimite(limite)) { limiteUsos = limite }
+                        }
                     }
                 }
 
@@ -321,7 +392,7 @@ private struct GenerarCodigoTabView: View {
     }
 
     private func etiquetaLimite(_ limite: Int) -> String {
-        "\(limite) uso\(limite == 1 ? "" : "s")"
+        limite == 0 ? "Ilimitado" : "\(limite) uso\(limite == 1 ? "" : "s")"
     }
 
     private func generarToken() async {
@@ -337,10 +408,6 @@ private struct GenerarCodigoTabView: View {
 
         isSubmitting = true
 
-        let fechaExpiracion = Calendar.current.date(byAdding: .hour, value: vigenciaHoras, to: Date()) ?? Date()
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-
         guard let url = URL(string: "https://resde.aseenti.com.mx/api/v1/claves-acceso") else {
             isSubmitting = false
             errorPeticion = ErrorPeticionMensaje(mensaje: "URL inválida")
@@ -353,14 +420,44 @@ private struct GenerarCodigoTabView: View {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let params: [String: Any] = [
+        var params: [String: Any] = [
             "nombre": nombre,
             "ubicacion_id": ubicacionId,
-            "tipo_acceso": tipoAcceso.rawValue,
-            "limite_usos": limiteUsos,
-            "duracion_horas": vigenciaHoras,
-            "fecha_expiracion": dateFormatter.string(from: fechaExpiracion)
+            "tipo_acceso": tipoAcceso.rawValue
         ]
+
+        switch tipoAcceso {
+        case .reunion:
+            let finDelDiaEvento = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: fechaEvento) ?? fechaEvento
+            let diffHoras = Int(finDelDiaEvento.timeIntervalSince(Date()) / 3600)
+            let duracionHoras = max(diffHoras, 24)
+
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+
+            params["limite_usos"] = 20
+            params["duracion_horas"] = duracionHoras
+            params["fecha_expiracion"] = dateFormatter.string(from: fechaEvento)
+
+        case .paqueteria:
+            let horasPaqueteria = 12
+            let fechaExpiracion = Calendar.current.date(byAdding: .hour, value: horasPaqueteria, to: Date()) ?? Date()
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+
+            params["limite_usos"] = 1
+            params["duracion_horas"] = horasPaqueteria
+            params["fecha_expiracion"] = dateFormatter.string(from: fechaExpiracion)
+
+        case .visita:
+            let fechaExpiracion = Calendar.current.date(byAdding: .hour, value: vigenciaHoras, to: Date()) ?? Date()
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+
+            params["limite_usos"] = limiteUsos
+            params["duracion_horas"] = vigenciaHoras
+            params["fecha_expiracion"] = dateFormatter.string(from: fechaExpiracion)
+        }
 
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: params)
@@ -395,7 +492,7 @@ private struct GenerarCodigoTabView: View {
 enum TipoAccesoOpcion: String, CaseIterable, Identifiable {
     case visita = "visita"
     case paqueteria = "paqueteria"
-    case evento = "evento"
+    case reunion = "reunion"
 
     var id: String { rawValue }
 
@@ -403,7 +500,7 @@ enum TipoAccesoOpcion: String, CaseIterable, Identifiable {
         switch self {
         case .visita: return "Visita"
         case .paqueteria: return "Paquetería"
-        case .evento: return "Reunión/Evento"
+        case .reunion: return "Reunión/Evento"
         }
     }
 }

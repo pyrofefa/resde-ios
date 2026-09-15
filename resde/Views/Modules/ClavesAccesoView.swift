@@ -9,6 +9,8 @@ struct ClavesAccesoView: View {
     @State private var errorMessage = ""
     @State private var showGenerarCodigo = false
     @State private var copiadoToken: String?
+    @State private var claveADesactivar: ClaveAccesoActiva?
+    @State private var isDesactivando = false
 
     private let botNumero = "14807419374"
 
@@ -119,6 +121,9 @@ struct ClavesAccesoView: View {
                                                     copiadoToken = nil
                                                 }
                                             }
+                                        },
+                                        onDesactivar: {
+                                            claveADesactivar = clave
                                         }
                                     )
                                 }
@@ -151,6 +156,17 @@ struct ClavesAccesoView: View {
                     }
                     .padding(16)
                 }
+            }
+
+            if let clave = claveADesactivar {
+                DesactivarClaveOverlay(
+                    clave: clave,
+                    isLoading: isDesactivando,
+                    onCancel: { claveADesactivar = nil },
+                    onConfirm: {
+                        Task { await desactivarClave(clave) }
+                    }
+                )
             }
         }
         .sheet(isPresented: $showGenerarCodigo) {
@@ -216,6 +232,92 @@ struct ClavesAccesoView: View {
         }
         return components?.url
     }
+
+    private func desactivarClave(_ clave: ClaveAccesoActiva) async {
+        guard let claveId = clave.claveId,
+              let url = URL(string: "https://resde.aseenti.com.mx/api/v1/claves-acceso/\(claveId)/desactivar") else {
+            claveADesactivar = nil
+            return
+        }
+
+        isDesactivando = true
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(authService.token ?? "")", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+            isDesactivando = false
+            claveADesactivar = nil
+
+            if statusCode >= 200 && statusCode < 300 {
+                claves.removeAll { $0.id == clave.id }
+            }
+        } catch {
+            print("❌ Error al desactivar clave: \(error)")
+            isDesactivando = false
+            claveADesactivar = nil
+        }
+    }
+}
+
+// MARK: - Confirmación de desactivación
+
+private struct DesactivarClaveOverlay: View {
+    let clave: ClaveAccesoActiva
+    let isLoading: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture { if !isLoading { onCancel() } }
+
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Desactivar clave")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Text("¿Seguro que quieres desactivar el código \(clave.token ?? "")? Ya no podrá usarse para dar acceso.")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Spacer()
+                    if isLoading {
+                        ProgressView()
+                            .padding(.trailing, 8)
+                    }
+                    Button(action: onCancel) {
+                        Text("Cancelar")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    .disabled(isLoading)
+                    .padding(.trailing, 16)
+
+                    Button(action: onConfirm) {
+                        Text("Desactivar")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.red)
+                    }
+                    .disabled(isLoading)
+                }
+            }
+            .padding(20)
+            .background(Color.cardBackground)
+            .cornerRadius(12)
+            .frame(maxWidth: 320)
+            .padding(.horizontal, 32)
+        }
+    }
 }
 
 // MARK: - Card
@@ -225,6 +327,7 @@ private struct ClaveAccesoCard: View {
     let botNumero: String
     let copiado: Bool
     let onCopiar: () -> Void
+    let onDesactivar: () -> Void
 
     private var esValida: Bool {
         clave.es_valida ?? true
@@ -286,7 +389,11 @@ private struct ClaveAccesoCard: View {
             .cornerRadius(10)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Usos restantes: \(clave.usos_restantes ?? 0) (Límite: \(clave.limite_usos ?? clave.usos_restantes ?? 0))")
+                if let limite = clave.limite_usos {
+                    Text("Usos restantes: \(clave.usos_restantes ?? 0) (Límite: \(limite))")
+                } else {
+                    Text("Usos ilimitados")
+                }
                 Text("Válido hasta: \(fechaFormateada)")
             }
             .font(.system(size: 13))
@@ -319,6 +426,16 @@ private struct ClaveAccesoCard: View {
                     .cornerRadius(8)
                 }
             }
+
+            if esValida {
+                Button(action: onDesactivar) {
+                    Text("Desactivar")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .padding(.top, 2)
+            }
         }
         .padding(16)
         .background(Color.cardBackground)
@@ -339,7 +456,8 @@ private struct ClaveAccesoCard: View {
 // MARK: - Modelos
 
 struct ClaveAccesoActiva: Decodable, Identifiable {
-    var id: String { token ?? UUID().uuidString }
+    var id: String { claveId.map(String.init) ?? token ?? UUID().uuidString }
+    let claveId: Int?
     let token: String?
     let nombre: String?
     let ubicacion_id: Int?
@@ -353,6 +471,14 @@ struct ClaveAccesoActiva: Decodable, Identifiable {
     let status: Int?
     let es_valida: Bool?
     let created: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case claveId = "id"
+        case token, nombre, ubicacion_id, ubicacion_nombre, tipo_acceso
+        case limite_usos, usos_registrados, usos_restantes
+        case fecha_expiracion, fecha_expiracion_formato
+        case status, es_valida, created
+    }
 }
 
 struct ClavesAccesoActivasResponse: Decodable {
