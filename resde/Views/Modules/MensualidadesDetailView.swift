@@ -64,8 +64,8 @@ struct MensualidadesDetailView: View {
 
                         HStack(spacing: 12) {
                             StatBox(label: "CUOTA ANUAL", value: viewModel.totales?.cuota ?? 0, color: .primary)
-                            StatBox(label: "TOTAL PAGADO", value: viewModel.totales?.pagado ?? 0, color: Color(red: 0.2, green: 0.7, blue: 0.2))
-                            StatBox(label: "RESTA TOTAL", value: viewModel.totales?.resta ?? 0, color: Color(red: 0.8, green: 0.2, blue: 0.2))
+                            StatBox(label: "TOTAL PAGADO", value: viewModel.totales?.pagado ?? 0, color: Color.statusSuccess)
+                            StatBox(label: "RESTA TOTAL", value: viewModel.totales?.resta ?? 0, color: Color.statusError)
                         }
 
                         VStack(spacing: 0) {
@@ -89,23 +89,23 @@ struct MensualidadesDetailView: View {
                                 VStack(spacing: 0) {
                                     HStack {
                                         Text(mes.mes)
-                                            .font(.system(size: 14, weight: .medium))
+                                            .font(.system(size: 10, weight: .medium))
                                             .foregroundColor(.primary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text("$\(String(format: "%.2f", mes.cuota))")
-                                            .font(.system(size: 14))
+                                            .font(.system(size: 10))
                                             .foregroundColor(.primary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text("$\(String(format: "%.2f", mes.pagado))")
-                                            .font(.system(size: 14))
+                                            .font(.system(size: 10))
                                             .foregroundColor(.primary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text("$\(String(format: "%.2f", mes.resta))")
-                                            .font(.system(size: 14, weight: .semibold))
+                                            .font(.system(size: 10, weight: .semibold))
                                             .foregroundColor(estatusColor(mes.estatus))
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(mes.estatus)
-                                            .font(.system(size: 12, weight: .semibold))
+                                            .font(.system(size: 10, weight: .semibold))
                                             .foregroundColor(estatusColor(mes.estatus))
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 4)
@@ -143,11 +143,11 @@ struct MensualidadesDetailView: View {
     private func estatusColor(_ estatus: String) -> Color {
         switch estatus {
         case "Pagado":
-            return Color(red: 0.2, green: 0.7, blue: 0.2)
+            return Color.statusSuccess
         case "Parcial", "Por validar":
-            return Color(red: 0.9, green: 0.6, blue: 0.1)
+            return Color.statusWarning
         default:
-            return Color(red: 0.8, green: 0.2, blue: 0.2)
+            return Color.statusError
         }
     }
 }

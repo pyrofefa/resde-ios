@@ -235,6 +235,7 @@ class AuthService: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Status code: \(httpResponse.statusCode)")
             }
@@ -242,6 +243,64 @@ class AuthService: ObservableObject {
         } catch {
             print("Error fetching \(endpoint): \(error)")
             return nil
+        }
+    }
+
+    /// Revalida la sesión contra /api/v1/me: cierra sesión si el servidor la rechaza
+    /// (usuario desactivado, residencial sin permiso, token inválido), y sincroniza
+    /// permisos/roles/ubicaciones si cambiaron desde el último login.
+    func validarSesionActiva() async {
+        guard isAuthenticated, let token = token, let url = URL(string: "\(baseURL)/me") else { return }
+
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let decoded = try? JSONDecoder().decode(MeResponse.self, from: data)
+
+            if statusCode == 401 || statusCode == 403 {
+                let mensaje = decoded?.message ?? "Tu sesión ha finalizado."
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .tokenInvalido, object: nil, userInfo: ["mensaje": mensaje])
+                }
+                return
+            }
+
+            guard statusCode == 200, let userData = decoded?.data, let actual = self.user else { return }
+
+            let nuevosPermissions = userData.permissions ?? actual.permissions
+            let nuevosRoles = userData.roles ?? actual.roles
+            let nuevasUbicaciones = userData.ubicaciones ?? actual.ubicaciones
+
+            let huboCambios = Set(nuevosPermissions) != Set(actual.permissions)
+                || Set(nuevosRoles) != Set(actual.roles)
+                || nuevasUbicaciones != actual.ubicaciones
+
+            guard huboCambios else { return }
+
+            let actualizado = AuthData(
+                id: userData.id,
+                first_name: userData.first_name ?? actual.first_name,
+                last_name: userData.last_name ?? actual.last_name,
+                residencial_id: userData.residencial_id ?? actual.residencial_id,
+                residencial: userData.residencial ?? actual.residencial,
+                logo: userData.logo ?? actual.logo,
+                is_super_admin: userData.is_super_admin ?? actual.is_super_admin,
+                ubicaciones: nuevasUbicaciones,
+                roles: nuevosRoles,
+                permissions: nuevosPermissions
+            )
+
+            await MainActor.run {
+                self.user = actualizado
+                UserDefaults.standard.set(try? JSONEncoder().encode(actualizado), forKey: "currentUser")
+                NotificationCenter.default.post(name: .permisosActualizados, object: nil)
+            }
+        } catch {
+            print("❌ Error validando sesión: \(error)")
         }
     }
 
@@ -267,6 +326,55 @@ class AuthService: ObservableObject {
         }
 
         return "Datos inválidos"
+    }
+}
+
+extension Notification.Name {
+    /// Se dispara cuando cualquier llamada a la API responde 401 (token inválido/expirado).
+    /// El userInfo puede incluir "mensaje": String con el motivo exacto del servidor.
+    static let tokenInvalido = Notification.Name("TokenInvalido")
+    /// Se dispara cuando /api/v1/me detecta que los permisos, roles o ubicaciones del
+    /// usuario cambiaron desde el último login.
+    static let permisosActualizados = Notification.Name("PermisosActualizados")
+}
+
+struct MeResponseData: Codable {
+    let id: Int
+    let first_name: String?
+    let last_name: String?
+    let residencial_id: Int?
+    let residencial: String?
+    let logo: String?
+    let is_super_admin: Bool?
+    let ubicaciones: [String: String]?
+    let roles: [String]?
+    let permissions: [String]?
+}
+
+struct MeResponse: Codable {
+    let success: Bool?
+    let code: Int?
+    let status: String?
+    let message: String?
+    let data: MeResponseData?
+}
+
+/// Revisa la respuesta de una llamada a la API; si es 401, notifica para que la sesión se cierre.
+/// Debe llamarse justo después de cada `URLSession.shared.data(for:)` que use el Bearer token.
+func checkTokenInvalido(_ response: URLResponse?) {
+    guard let httpResponse = response as? HTTPURLResponse else { return }
+
+    // Algunos endpoints responden 401/419 en JSON; otros, cuando el token es
+    // inválido, terminan redirigiendo (302 → 200) a la página HTML de login
+    // en vez de devolver un error de API. Detectamos ambos casos.
+    let redirigioALogin = httpResponse.url?.path.contains("/login") == true
+    let statusInvalido = httpResponse.statusCode == 401 || httpResponse.statusCode == 419
+
+    if statusInvalido || redirigioALogin {
+        print("🔒 Token inválido/expirado (\(httpResponse.statusCode)\(redirigioALogin ? ", redirigido a /login" : "")) — cerrando sesión")
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .tokenInvalido, object: nil)
+        }
     }
 }
 

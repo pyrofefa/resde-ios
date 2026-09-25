@@ -10,6 +10,8 @@ class CensoViewModel: ObservableObject {
     @Published var isSaving = false
     @Published var errorMessage = ""
     @Published var showError = false
+    @Published var showSuccessToast = false
+    @Published var successMessage = ""
 
     private let authService = AuthService(mockData: false)
 
@@ -75,11 +77,20 @@ class CensoViewModel: ObservableObject {
             request.httpBody = jsonData
 
             let (_, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
 
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 {
                     await MainActor.run {
                         isSaving = false
+                        successMessage = "Censo guardado correctamente"
+                        showSuccessToast = true
+                    }
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        await MainActor.run {
+                            showSuccessToast = false
+                        }
                     }
                 } else {
                     await MainActor.run {
@@ -110,6 +121,7 @@ class CensoViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Censo Status: \(httpResponse.statusCode)")
             }

@@ -13,7 +13,7 @@ enum ModuleDateFormat {
 struct ModuleHeader: View {
     @Environment(\.dismiss) var dismiss
     let title: String
-    let showYear: Bool = true
+    var showYear: Bool = true
     let dateFormat: ModuleDateFormat = .yearOnly
     @State private var selectedDate = Date()
     @State private var showDatePicker = false

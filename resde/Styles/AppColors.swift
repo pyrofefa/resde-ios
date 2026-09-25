@@ -38,6 +38,25 @@ extension Color {
             ? UIColor(red: 0.36, green: 0.16, blue: 0.16, alpha: 1.0)
             : UIColor(red: 1.0, green: 0.9, blue: 0.9, alpha: 1.0)
     })
+
+    /// Tinte verde claro para tarjetas de confirmación/éxito. Se oscurece en modo oscuro.
+    static let greenTint = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.13, green: 0.26, blue: 0.18, alpha: 1.0)
+            : UIColor(red: 0.88, green: 0.96, blue: 0.9, alpha: 1.0)
+    })
+
+    /// Verde sólido para estados positivos (pagado, válido, éxito, activo).
+    static let statusSuccess = Color(red: 0.2, green: 0.7, blue: 0.2)
+
+    /// Rojo sólido para estados negativos (vencido, fallido, error, inactivo).
+    static let statusError = Color(red: 0.8, green: 0.2, blue: 0.2)
+
+    /// Naranja sólido para estados intermedios (pendiente, iniciada, parcial).
+    static let statusWarning = Color(red: 0.9, green: 0.6, blue: 0.0)
+
+    /// Verde de marca de WhatsApp, usado para el enlace/indicador del bot RESDE Guard.
+    static let whatsappGreen = Color(red: 0.15, green: 0.7, blue: 0.35)
 }
 
 struct AppBackgroundModifier: ViewModifier {

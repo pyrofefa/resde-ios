@@ -6,6 +6,7 @@ struct CensoView: View {
     @EnvironmentObject var authService: AuthService
 
     var body: some View {
+        ZStack {
         VStack(spacing: 0) {
             HStack {
                 Button(action: { dismiss() }) {
@@ -85,8 +86,13 @@ struct CensoView: View {
                             }
                         }) {
                             HStack(spacing: 8) {
-                                Image(systemName: "square.and.arrow.down.fill")
-                                Text("Guardar")
+                                if viewModel.isSaving {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Image(systemName: "square.and.arrow.down.fill")
+                                }
+                                Text(viewModel.isSaving ? "Guardando..." : "Guardar")
                             }
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
@@ -110,6 +116,14 @@ struct CensoView: View {
             Task {
                 await viewModel.loadCenso(ubicacionId: ubicacionId)
             }
+        }
+
+        VStack {
+            Spacer()
+            if viewModel.showSuccessToast {
+                SuccessToast(message: viewModel.successMessage)
+            }
+        }
         }
     }
 }

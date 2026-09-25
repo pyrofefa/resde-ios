@@ -9,6 +9,8 @@ class VehiculosViewModel: ObservableObject {
     @Published var isSaving = false
     @Published var errorMessage = ""
     @Published var showError = false
+    @Published var showSuccessToast = false
+    @Published var successMessage = ""
 
     private let authService: AuthService
 
@@ -44,6 +46,7 @@ class VehiculosViewModel: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
             let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
 
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw NSError(domain: "API", code: -1)
@@ -122,12 +125,19 @@ class VehiculosViewModel: ObservableObject {
             request.httpBody = jsonData
 
             let (_, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
 
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw NSError(domain: "API", code: -1)
             }
 
             isSaving = false
+            successMessage = "Vehículos guardados correctamente"
+            showSuccessToast = true
+            Task {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                showSuccessToast = false
+            }
         } catch {
             print("❌ Error al guardar vehículos: \(error)")
             errorMessage = "Error: \(error.localizedDescription)"
