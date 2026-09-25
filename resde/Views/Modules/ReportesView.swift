@@ -170,7 +170,7 @@ private struct ResumenFinancieroCard: View {
                     Spacer()
                     Text(formatMonto(resumen.ingresosValor))
                         .fontWeight(.semibold)
-                        .foregroundColor(Color(red: 0.2, green: 0.7, blue: 0.2))
+                        .foregroundColor(Color.statusSuccess)
                 }
 
                 HStack {
@@ -179,7 +179,7 @@ private struct ResumenFinancieroCard: View {
                     Spacer()
                     Text(formatMonto(resumen.egresosValor))
                         .fontWeight(.semibold)
-                        .foregroundColor(Color(red: 0.8, green: 0.2, blue: 0.2))
+                        .foregroundColor(Color.statusError)
                 }
 
                 Divider()
@@ -191,7 +191,7 @@ private struct ResumenFinancieroCard: View {
                     Spacer()
                     Text(formatMonto(resumen.balanceValor))
                         .fontWeight(.bold)
-                        .foregroundColor(resumen.balanceValor >= 0 ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.8, green: 0.2, blue: 0.2))
+                        .foregroundColor(resumen.balanceValor >= 0 ? Color.statusSuccess : Color.statusError)
                 }
             }
             .padding(12)
@@ -414,7 +414,7 @@ private struct ComparacionFuentesCard: View {
         guard let grafica = grafica else { return [] }
         return [
             PieSlice(label: "Ingresos", monto: grafica.ingresosValor, color: .blue),
-            PieSlice(label: "Egresos", monto: grafica.egresosValor, color: Color(red: 0.2, green: 0.7, blue: 0.2))
+            PieSlice(label: "Egresos", monto: grafica.egresosValor, color: Color.statusSuccess)
         ].filter { $0.monto > 0 }
     }
 
@@ -467,7 +467,7 @@ private struct ComparacionConceptosCard: View {
     }
 
     private var colorBarra: Color {
-        conceptoSeleccionado == .ingresos ? .blue : Color(red: 0.2, green: 0.7, blue: 0.2)
+        conceptoSeleccionado == .ingresos ? .blue : Color.statusSuccess
     }
 
     private var prefijoClave: String {
@@ -608,7 +608,7 @@ private struct TendenciaCard: View {
                 }
                 .chartForegroundStyleScale([
                     "Ingresos": Color.blue,
-                    "Egresos": Color(red: 0.2, green: 0.7, blue: 0.2)
+                    "Egresos": Color.statusSuccess
                 ])
                 .frame(height: 220)
             }

@@ -11,7 +11,7 @@ struct MensualidadesView: View {
     @EnvironmentObject var authService: AuthService
 
     private var deudaColor: Color {
-        viewModel.deudaTotalAcumulada <= 0 ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.8, green: 0.2, blue: 0.2)
+        viewModel.deudaTotalAcumulada <= 0 ? Color.statusSuccess : Color.statusError
     }
 
     var body: some View {
@@ -100,11 +100,11 @@ struct YearDebtCard: View {
                 VStack(alignment: .trailing, spacing: 8) {
                     Text("Pagado: $\(String(format: "%.2f", totales?.pagado ?? 0))")
                         .font(.system(size: 12))
-                        .foregroundColor(Color(red: 0.2, green: 0.7, blue: 0.2))
+                        .foregroundColor(Color.statusSuccess)
                     HStack(spacing: 4) {
                         Text("$\(String(format: "%.2f", totales?.resta ?? 0))")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(Color(red: 0.8, green: 0.2, blue: 0.2))
+                            .foregroundColor(Color.statusError)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12))
                             .foregroundColor(.blue)

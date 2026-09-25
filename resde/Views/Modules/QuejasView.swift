@@ -10,7 +10,7 @@ import UIKit
 struct QuejasView: View {
     @EnvironmentObject var authService: AuthService
     @Environment(\.dismiss) var dismiss
-    @State private var selectedUbicacion = "Juan Rulfo #11"
+    @State private var selectedUbicacion = ""
     @State private var quejas: [Queja] = []
     @State private var isLoading = true
     @State private var showCreateQueja = false
@@ -116,6 +116,9 @@ struct QuejasView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
+            if selectedUbicacion.isEmpty {
+                selectedUbicacion = authService.user?.ubicaciones.first?.value ?? ""
+            }
             loadQuejas()
         }
     }
@@ -169,11 +172,16 @@ struct QuejasView: View {
 
 struct QuejaCard: View {
     let queja: Queja
+    @EnvironmentObject var authService: AuthService
+
+    var ubicacionTexto: String {
+        authService.user?.ubicaciones[String(queja.ubicacion_id)] ?? ""
+    }
 
     var statusColor: Color {
         switch queja.estatus?.id {
-        case 1: return Color(red: 0.2, green: 0.7, blue: 0.2)
-        case 2: return Color(red: 1.0, green: 0.6, blue: 0.0)
+        case 1: return Color.statusSuccess
+        case 2: return Color.statusWarning
         case 3: return Color(red: 0.5, green: 0.5, blue: 0.5)
         default: return Color.gray
         }
@@ -190,7 +198,7 @@ struct QuejaCard: View {
                     Text(queja.tipo?.descripcion ?? "Queja")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.primary)
-                    Text(queja.ubicacion_id > 0 ? "Juan Rulfo #11" : "")
+                    Text(ubicacionTexto)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -507,7 +515,6 @@ struct CreateQuejaSheet: View {
             "residencial_id": String(authService.user?.residencial_id ?? 1),
             "ubicacion_id": ubicacionId,
             "tipo_queja_id": String(tipoId),
-            "estatus_queja_id": "1",
             "descripcion": descripcion
         ]
 

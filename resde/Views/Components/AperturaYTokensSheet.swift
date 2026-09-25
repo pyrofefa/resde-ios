@@ -131,7 +131,7 @@ private struct AbrirPlumaTabView: View {
     @State private var isPressing = false
 
     private var colorBoton: Color {
-        estado == .exito ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.0, green: 0.4, blue: 0.7)
+        estado == .exito ? Color.statusSuccess : Color(red: 0.0, green: 0.4, blue: 0.7)
     }
 
     private var etiquetaBoton: String {
@@ -693,10 +693,10 @@ struct TokenGeneradoSheet: View {
                 }) {
                     HStack(spacing: 8) {
                         Image(systemName: "megaphone.fill")
-                            .foregroundColor(Color(red: 0.15, green: 0.7, blue: 0.35))
+                            .foregroundColor(Color.whatsappGreen)
                         Text("\(numeroFormateado) (Tocar para chatear)")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(Color(red: 0.15, green: 0.7, blue: 0.35))
+                            .foregroundColor(Color.whatsappGreen)
                     }
                     .multilineTextAlignment(.center)
                 }

@@ -13,7 +13,7 @@ struct SuccessToast: View {
             Spacer()
         }
         .padding(12)
-        .background(Color(red: 0.2, green: 0.7, blue: 0.2))
+        .background(Color.statusSuccess)
         .cornerRadius(8)
         .padding(.horizontal, 16)
         .padding(.bottom, 12)

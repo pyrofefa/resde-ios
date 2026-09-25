@@ -456,9 +456,9 @@ struct EventoCard: View {
     private var estatusColor: Color {
         switch estatusTexto.lowercased() {
         case "pagado":
-            return Color(red: 0.2, green: 0.7, blue: 0.2)
+            return Color.statusSuccess
         case "pendiente":
-            return Color(red: 0.9, green: 0.6, blue: 0.1)
+            return Color.statusWarning
         default:
             return .secondary
         }

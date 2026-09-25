@@ -12,7 +12,7 @@ import CoreData
 struct resdeApp: App {
     let persistenceController = PersistenceController.shared
 
-    @StateObject private var authService = AuthService(mockData: true)
+    @StateObject private var authService = AuthService(mockData: false)
     @Environment(\.scenePhase) private var scenePhase
     @State private var validacionPeriodicaTask: Task<Void, Never>?
 

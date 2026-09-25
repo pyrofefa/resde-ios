@@ -454,7 +454,7 @@ struct InfoCarousel: View {
         let estadoAdeudos = authService.carouselData.estadoAdeudos?.data
         let alCorriente = (estadoAdeudos?.saldoPendiente ?? 0) <= 0
         let cuotaMonto = estadoAdeudos?.cuotaActualMonto ?? 0
-        let cuotaLabel = estadoAdeudos?.cuotaSub ?? "Enero – Agosto sin ningún pago registrado ($1,200)."
+        let cuotaLabel = estadoAdeudos?.cuotaSub ?? ""
         let cuotaTitulo = estadoAdeudos?.cuotaActualLabel?.uppercased()
             ?? "CUOTA DE \((estadoAdeudos?.cuotaActual?.mes ?? "").uppercased())"
         items.append(CarouselItem(
@@ -464,7 +464,7 @@ struct InfoCarousel: View {
             subtitle: alCorriente ? "" : "Por pagar",
             description: cuotaLabel,
             backgroundColor: alCorriente ? Color(red: 0.9, green: 0.98, blue: 0.9) : Color.redTint,
-            titleColor: alCorriente ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.9, green: 0.2, blue: 0.2)
+            titleColor: alCorriente ? Color.statusSuccess : Color.statusError
         ))
 
         items.append(CarouselItem(
@@ -604,52 +604,6 @@ struct CarouselItemCard: View {
     }
 }
 
-struct InfoCard: View {
-    let index: Int
-
-    var cardData: (title: String, amount: String, subtitle: String, color: Color) {
-        switch index {
-        case 0:
-            return ("CUOTA DE AGOSTO", "$150.00", "Enero – Agosto sin ningún pago registrado ($1,200).", .red)
-        case 1:
-            return ("Próximo Pago", "$0.00", "", .primary)
-        default:
-            return ("Mantenimiento", "$0.00", "", .primary)
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(cardData.title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(cardData.color)
-                .textCase(.uppercase)
-
-            Spacer()
-
-            Text(cardData.amount)
-                .font(.system(size: 32, weight: .bold))
-                .foregroundColor(cardData.color)
-
-            if !cardData.subtitle.isEmpty {
-                Text(cardData.subtitle)
-                    .font(.system(size: 11))
-                    .foregroundColor(cardData.color.opacity(0.7))
-                    .lineLimit(2)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            index == 0
-                ? Color(red: 1, green: 0.95, blue: 0.95)
-                : Color.cardBackground
-        )
-        .cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
-    }
-}
-
 // MARK: - ResumenSection
 struct ResumenSection: View {
     @EnvironmentObject var authService: AuthService
@@ -686,7 +640,7 @@ struct ResumenCards: View {
                     amount: String(format: "$%.2f", validado),
                     subtitle: estadoAdeudos?.data?.validadoLabel ?? "\(validadoCount) meses cubiertos",
                     backgroundColor: Color(red: 0.9, green: 0.98, blue: 0.9),
-                    titleColor: Color(red: 0.2, green: 0.7, blue: 0.2)
+                    titleColor: Color.statusSuccess
                 )
 
                 ResumenCardItem(
@@ -712,7 +666,7 @@ struct ResumenCards: View {
                     amount: String(format: "$%.2f", faltante),
                     subtitle: estadoAdeudos?.data?.faltanteLabel ?? "\(faltanteCount) meses sin registrar",
                     backgroundColor: Color(red: 1, green: 0.9, blue: 0.9),
-                    titleColor: Color(red: 0.9, green: 0.2, blue: 0.2)
+                    titleColor: Color.statusError
                 )
             }
         }
@@ -775,13 +729,13 @@ struct PanoramaContent: View {
     func colorForStatus(_ status: String?) -> Color {
         switch status {
         case "validado":
-            return Color(red: 0.2, green: 0.7, blue: 0.2)
+            return Color.statusSuccess
         case "parcial":
             return Color(red: 1, green: 0.65, blue: 0)
         case "pendiente":
             return Color(red: 1, green: 0.8, blue: 0)
         case "faltante":
-            return Color(red: 0.9, green: 0.2, blue: 0.2)
+            return Color.statusError
         case "futuro":
             return Color.gray.opacity(0.5)
         default:
@@ -791,7 +745,7 @@ struct PanoramaContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(cuotaSub ?? "Enero – Agosto sin ningún pago registrado ($1,200).")
+            Text(cuotaSub ?? "")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
 

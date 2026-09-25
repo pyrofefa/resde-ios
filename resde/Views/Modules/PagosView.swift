@@ -241,9 +241,9 @@ struct PagoRow: View {
     private var colorEstatus: Color {
         switch pago.validado {
         case 1:
-            return Color(red: 0.18, green: 0.55, blue: 0.28)
+            return Color.statusSuccess
         case 0:
-            return Color(red: 0.9, green: 0.6, blue: 0.1)
+            return Color.statusWarning
         default:
             return Color.gray
         }

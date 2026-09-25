@@ -9,7 +9,7 @@ import UIKit
 struct TarjetasView: View {
     @EnvironmentObject var authService: AuthService
     @Environment(\.dismiss) var dismiss
-    @State private var selectedUbicacion = "Juan Rulfo #11"
+    @State private var selectedUbicacion = ""
     @State private var tarjetas: [Tarjeta] = []
     @State private var isLoading = true
     @State private var selectedTarjeta: Tarjeta?
@@ -111,6 +111,9 @@ struct TarjetasView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
+            if selectedUbicacion.isEmpty {
+                selectedUbicacion = authService.user?.ubicaciones.first?.value ?? ""
+            }
             loadTarjetas()
         }
     }
@@ -166,7 +169,7 @@ struct TarjetaCard: View {
     let tarjeta: Tarjeta
 
     var statusColor: Color {
-        tarjeta.status == 1 ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.9, green: 0.2, blue: 0.2)
+        tarjeta.status == 1 ? Color.statusSuccess : Color.statusError
     }
 
     var statusText: String {

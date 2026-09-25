@@ -356,12 +356,12 @@ private struct ClaveAccesoCard: View {
                 Spacer()
                 Text(esValida ? "Válida" : "Expirada / Agotada")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(esValida ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.8, green: 0.2, blue: 0.2))
+                    .foregroundColor(esValida ? Color.statusSuccess : Color.statusError)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
                     .background(Color.white)
                     .cornerRadius(14)
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(esValida ? Color(red: 0.2, green: 0.7, blue: 0.2) : Color(red: 0.8, green: 0.2, blue: 0.2), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(esValida ? Color.statusSuccess : Color.statusError, lineWidth: 1))
             }
 
             Text("TIPO: \(tipoAccesoLabel(clave.tipo_acceso).uppercased())")
@@ -447,7 +447,7 @@ private struct ClaveAccesoCard: View {
         switch raw?.lowercased() {
         case "visita": return "Visita"
         case "paqueteria": return "Paquetería"
-        case "evento", "reunion": return "Reunión/Evento"
+        case "reunion": return "Reunión/Evento"
         default: return raw?.capitalized ?? "Acceso"
         }
     }

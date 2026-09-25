@@ -291,11 +291,11 @@ private struct HistorialEntradaCard: View {
     private var colorEstado: Color {
         switch entrada.estado?.lowercased() ?? "" {
         case let e where e.contains("exit") || e.contains("success") || e.contains("éxit"):
-            return Color(red: 0.2, green: 0.7, blue: 0.2)
+            return Color.statusSuccess
         case let e where e.contains("inicia") || e.contains("pending"):
-            return Color(red: 0.9, green: 0.6, blue: 0.0)
+            return Color.statusWarning
         case let e where e.contains("fall") || e.contains("error"):
-            return Color(red: 0.8, green: 0.2, blue: 0.2)
+            return Color.statusError
         default:
             return .secondary
         }
@@ -347,7 +347,7 @@ private struct HistorialEntradaCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Bot WhatsApp")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(Color(red: 0.15, green: 0.7, blue: 0.35))
+                            .foregroundColor(Color.whatsappGreen)
                         if let nombreClave = entrada.nombre_clave {
                             Text("\(nombreClave)\(entrada.tipo_clave.map { " · \($0.capitalized)" } ?? "")")
                                 .font(.system(size: 12))
@@ -357,7 +357,7 @@ private struct HistorialEntradaCard: View {
                     Spacer()
                 }
                 .padding(10)
-                .background(Color(red: 0.15, green: 0.7, blue: 0.35).opacity(0.1))
+                .background(Color.whatsappGreen.opacity(0.1))
                 .cornerRadius(8)
             }
         }
