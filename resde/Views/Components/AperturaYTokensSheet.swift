@@ -72,6 +72,10 @@ struct AperturaYTokensSheet: View {
                     authService: authService,
                     onTokenGenerado: { token in
                         tokenGenerado = token
+                        // Refrescar el listado de una vez, en cuanto se crea el token, en
+                        // vez de esperar a que cierren la sheet — así ya terminó cuando
+                        // el usuario le da a "Cerrar" y no hay carrera con el dismiss.
+                        onTokenGenerado?()
                     }
                 )
             }
@@ -81,8 +85,9 @@ struct AperturaYTokensSheet: View {
         .background(Color.appBackground)
         .sheet(item: $tokenGenerado) { token in
             TokenGeneradoSheet(token: token, onCerrar: {
-                tokenGenerado = nil
-                onTokenGenerado?()
+                // Solo cerramos la sheet de afuera: al hacerlo, SwiftUI cierra junto
+                // con ella la de "código generado" en una sola animación, sin que se
+                // alcance a ver de regreso el formulario de "Generar Código".
                 dismiss()
             })
             .presentationDetents([.fraction(0.6)])
