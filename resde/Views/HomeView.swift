@@ -34,7 +34,10 @@ struct HomeView: View {
                         )
                     }
                     .refreshable {
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                        if let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == selectedUbicacion })?.key
+                            ?? authService.user?.ubicaciones.first?.key {
+                            await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
+                        }
                     }
                 }
 

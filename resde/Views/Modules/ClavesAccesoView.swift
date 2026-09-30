@@ -133,6 +133,9 @@ struct ClavesAccesoView: View {
                     }
                     .padding(.bottom, 24)
                 }
+                .refreshable {
+                    await loadClaves()
+                }
             }
             .background(Color.appBackground)
             .navigationBarBackButtonHidden()
