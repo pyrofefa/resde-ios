@@ -1,10 +1,16 @@
 import SwiftUI
 
 struct ChangePasswordSheet: View {
+    let cuenta: Cuenta
+    @ObservedObject var viewModel: CuentasViewModel
     @Binding var isPresented: Bool
+    let onActualizada: (String) -> Void
+
     @State private var newPassword = ""
     @State private var confirmPassword = ""
     @State private var showPassword = false
+    @State private var isSaving = false
+    @State private var errorAlert: ErrorPeticionMensaje?
 
     var body: some View {
         NavigationView {
@@ -14,73 +20,19 @@ struct ChangePasswordSheet: View {
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.primary)
 
-                    Text("Define una nueva clave de acceso para esta cuenta vinculada.")
+                    Text("Define una nueva clave de acceso para \(cuenta.nombre_completo).")
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
 
-                    VStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Nueva contraseña")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.secondary)
-                            HStack {
-                                if showPassword {
-                                    TextField("Nueva contraseña", text: $newPassword)
-                                        .font(.system(size: 16))
-                                } else {
-                                    SecureField("Nueva contraseña", text: $newPassword)
-                                        .font(.system(size: 16))
-                                }
-                                Button(action: { showPassword.toggle() }) {
-                                    Image(systemName: showPassword ? "eye.slash" : "eye")
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .padding(12)
-                            .background(Color.cardBackground)
-                            .cornerRadius(8)
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.3), lineWidth: 1))
-                        }
+                    CampoContrasena(titulo: "Nueva contraseña", texto: $newPassword, mostrar: $showPassword)
+                    CampoContrasena(titulo: "Confirmar contraseña", texto: $confirmPassword, mostrar: $showPassword)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Confirmar contraseña")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.secondary)
-                            HStack {
-                                if showPassword {
-                                    TextField("Confirmar contraseña", text: $confirmPassword)
-                                        .font(.system(size: 16))
-                                } else {
-                                    SecureField("Confirmar contraseña", text: $confirmPassword)
-                                        .font(.system(size: 16))
-                                }
-                                Button(action: { showPassword.toggle() }) {
-                                    Image(systemName: showPassword ? "eye.slash" : "eye")
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .padding(12)
-                            .background(Color.cardBackground)
-                            .cornerRadius(8)
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.3), lineWidth: 1))
-                        }
+                    Text("Mínimo 8 caracteres.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
 
-                        Text("Mínimo 8 caracteres.")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                    }
-
-                    Button(action: {}) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.square.fill")
-                            Text("Actualizar Contraseña")
-                        }
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(12)
-                        .background(Color(red: 0.0, green: 0.4, blue: 0.7))
-                        .cornerRadius(12)
+                    BotonAccion(titulo: isSaving ? "Actualizando..." : "Actualizar Contraseña", cargando: isSaving) {
+                        Task { await actualizar() }
                     }
 
                     Button(action: { isPresented = false }) {
@@ -95,6 +47,32 @@ struct ChangePasswordSheet: View {
             }
             .background(Color.appBackground)
             .navigationBarHidden(true)
+        }
+        .sheet(item: $errorAlert) { error in
+            ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: { errorAlert = nil })
+                .presentationDetents([.fraction(0.45)])
+        }
+    }
+
+    private func actualizar() async {
+        if newPassword.count < 8 {
+            errorAlert = ErrorPeticionMensaje(mensaje: "La contraseña debe tener al menos 8 caracteres")
+            return
+        }
+        if newPassword != confirmPassword {
+            errorAlert = ErrorPeticionMensaje(mensaje: "Las contraseñas no coinciden")
+            return
+        }
+
+        isSaving = true
+        let resultado = await viewModel.cambiarPassword(id: cuenta.id, password: newPassword, confirmacion: confirmPassword)
+        isSaving = false
+
+        if resultado.exito {
+            isPresented = false
+            onActualizada(resultado.mensaje)
+        } else {
+            errorAlert = ErrorPeticionMensaje(mensaje: resultado.mensaje)
         }
     }
 }
