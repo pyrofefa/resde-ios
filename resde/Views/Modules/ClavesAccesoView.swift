@@ -392,11 +392,9 @@ private struct ClaveAccesoCard: View {
             .cornerRadius(10)
 
             VStack(alignment: .leading, spacing: 2) {
-                if let limite = clave.limite_usos {
-                    Text("Usos restantes: \(clave.usos_restantes ?? 0) (Límite: \(limite))")
-                } else {
-                    Text("Usos ilimitados")
-                }
+                let limite = clave.limite_usos ?? 0
+                let restantes = clave.usos_restantes ?? (limite - (clave.usos_registrados ?? 0))
+                Text("Usos restantes: \(restantes) (Límite: \(limite == 0 ? "Ilimitados" : String(limite)))")
                 Text("Válido hasta: \(fechaFormateada)")
             }
             .font(.system(size: 13))

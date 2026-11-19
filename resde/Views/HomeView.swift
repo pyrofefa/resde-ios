@@ -324,10 +324,7 @@ struct HomeHeader: View {
                 }
 
                 Spacer()
-                Image("logoApp")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 50, height: 50)
+                ResidencialLogo(base64: user?.logo, size: 50)
             }
         }
     }
@@ -526,6 +523,14 @@ struct InfoCarousel: View {
     }
 
     var body: some View {
+        if authService.cargandoDatosHome {
+            SeccionCargando(logo: authService.user?.logo, height: 200)
+        } else {
+            contenido
+        }
+    }
+
+    private var contenido: some View {
         VStack(spacing: 12) {
             GeometryReader { geometry in
                 HStack(spacing: 16) {
@@ -618,7 +623,11 @@ struct ResumenSection: View {
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
 
-            ResumenCards(estadoAdeudos: authService.carouselData.estadoAdeudos)
+            if authService.cargandoDatosHome {
+                SeccionCargando(logo: authService.user?.logo, height: 150)
+            } else {
+                ResumenCards(estadoAdeudos: authService.carouselData.estadoAdeudos)
+            }
         }
     }
 }
@@ -716,10 +725,14 @@ struct PanoramaSection: View {
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
 
-            PanoramaContent(
-                mesesDetalle: authService.carouselData.estadoAdeudos?.data?.mesesDetalle ?? [],
-                cuotaSub: authService.carouselData.estadoAdeudos?.data?.cuotaSub
-            )
+            if authService.cargandoDatosHome {
+                SeccionCargando(logo: authService.user?.logo, height: 120)
+            } else {
+                PanoramaContent(
+                    mesesDetalle: authService.carouselData.estadoAdeudos?.data?.mesesDetalle ?? [],
+                    cuotaSub: authService.carouselData.estadoAdeudos?.data?.cuotaSub
+                )
+            }
         }
     }
 }

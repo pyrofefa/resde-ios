@@ -43,6 +43,8 @@ class MensualidadesViewModel: ObservableObject {
     @Published var showError = false
 
     private let authService: AuthService
+    /// Cuántos años hacia atrás se buscan mensualidades.
+    private static let aniosAtras = 15
 
     init() {
         self.authService = AuthService(mockData: false)
@@ -54,7 +56,9 @@ class MensualidadesViewModel: ObservableObject {
         showError = false
 
         let currentYear = Calendar.current.component(.year, from: Date())
-        let yearsToShow = [currentYear, currentYear - 1, currentYear - 2]
+        // Se consultan varios años en paralelo (incluyendo el siguiente, por pagos adelantados)
+        // y solo se muestran los que realmente tienen mensualidades.
+        let candidateYears = Array((currentYear - Self.aniosAtras)...(currentYear + 1))
 
         if let adeudosData = await fetchData(endpoint: "ubicaciones/estado-adeudos", params: ["ubicacion_id": "\(ubicacionId)"]) {
             if let response = try? JSONDecoder().decode(EstadoAdeudosResponse.self, from: adeudosData) {
@@ -63,13 +67,25 @@ class MensualidadesViewModel: ObservableObject {
         }
 
         var totales: [Int: MensualidadTotales] = [:]
-        for year in yearsToShow {
-            if let data = await fetchData(endpoint: "mantenimiento/mensualidades", params: ["ubicacion_id": "\(ubicacionId)", "anio": "\(year)"]) {
-                if let response = try? JSONDecoder().decode(MensualidadesResponse.self, from: data) {
-                    totales[year] = response.data.totales
+        await withTaskGroup(of: (Int, MensualidadesData?).self) { group in
+            for year in candidateYears {
+                group.addTask { [self] in
+                    guard let data = await fetchData(endpoint: "mantenimiento/mensualidades", params: ["ubicacion_id": "\(ubicacionId)", "anio": "\(year)"]),
+                          let response = try? JSONDecoder().decode(MensualidadesResponse.self, from: data) else {
+                        return (year, nil)
+                    }
+                    return (year, response.data)
+                }
+            }
+            for await (year, data) in group {
+                if let data, !data.mensualidades.isEmpty {
+                    totales[year] = data.totales
                 }
             }
         }
+
+        var yearsToShow = totales.keys.sorted(by: >)
+        if yearsToShow.isEmpty { yearsToShow = [currentYear] }
 
         self.years = yearsToShow
         self.totalesPorAnio = totales

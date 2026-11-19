@@ -299,9 +299,11 @@ private struct GenerarCodigoTabView: View {
                     .cornerRadius(10)
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
 
-                CampoSelector(label: "Tipo de acceso", valor: tipoAcceso.label) {
+                GrupoChips(titulo: "Tipo de acceso") {
                     ForEach(TipoAccesoOpcion.allCases) { opcion in
-                        Button(opcion.label) { tipoAcceso = opcion }
+                        ChipOpcion(texto: opcion.label, seleccionado: tipoAcceso == opcion) {
+                            tipoAcceso = opcion
+                        }
                     }
                 }
 
@@ -359,15 +361,19 @@ private struct GenerarCodigoTabView: View {
                     .cornerRadius(8)
 
                 case .visita:
-                    CampoSelector(label: "Vigencia", valor: etiquetaVigencia(vigenciaHoras)) {
+                    GrupoChips(titulo: "Vigencia") {
                         ForEach(opcionesVigencia, id: \.self) { horas in
-                            Button(etiquetaVigencia(horas)) { vigenciaHoras = horas }
+                            ChipOpcion(texto: etiquetaVigencia(horas), seleccionado: vigenciaHoras == horas) {
+                                vigenciaHoras = horas
+                            }
                         }
                     }
 
-                    CampoSelector(label: "Límite de usos", valor: etiquetaLimite(limiteUsos)) {
+                    GrupoChips(titulo: "Límite de usos") {
                         ForEach(opcionesLimite, id: \.self) { limite in
-                            Button(etiquetaLimite(limite)) { limiteUsos = limite }
+                            ChipOpcion(texto: etiquetaLimite(limite), seleccionado: limiteUsos == limite) {
+                                limiteUsos = limite
+                            }
                         }
                     }
                 }
@@ -398,15 +404,11 @@ private struct GenerarCodigoTabView: View {
     }
 
     private func etiquetaVigencia(_ horas: Int) -> String {
-        if horas >= 24 && horas % 24 == 0 {
-            let dias = horas / 24
-            return "\(dias) día\(dias == 1 ? "" : "s")"
-        }
-        return "\(horas) hora\(horas == 1 ? "" : "s")"
+        "\(horas) horas"
     }
 
     private func etiquetaLimite(_ limite: Int) -> String {
-        limite == 0 ? "Ilimitado" : "\(limite) uso\(limite == 1 ? "" : "s")"
+        limite == 0 ? "Ilimitados" : "\(limite) uso\(limite == 1 ? "" : "s")"
     }
 
     private func generarToken() async {
@@ -454,23 +456,14 @@ private struct GenerarCodigoTabView: View {
             params["fecha_expiracion"] = dateFormatter.string(from: fechaEvento)
 
         case .paqueteria:
-            let horasPaqueteria = 12
-            let fechaExpiracion = Calendar.current.date(byAdding: .hour, value: horasPaqueteria, to: Date()) ?? Date()
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-
+            // Sin fecha_expiracion: el servidor la calcula con duracion_horas (igual que Android).
             params["limite_usos"] = 1
-            params["duracion_horas"] = horasPaqueteria
-            params["fecha_expiracion"] = dateFormatter.string(from: fechaExpiracion)
+            params["duracion_horas"] = 12
 
         case .visita:
-            let fechaExpiracion = Calendar.current.date(byAdding: .hour, value: vigenciaHoras, to: Date()) ?? Date()
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-
+            // Sin fecha_expiracion: el servidor la calcula con duracion_horas (igual que Android).
             params["limite_usos"] = limiteUsos
             params["duracion_horas"] = vigenciaHoras
-            params["fecha_expiracion"] = dateFormatter.string(from: fechaExpiracion)
         }
 
         do {
@@ -514,7 +507,92 @@ enum TipoAccesoOpcion: String, CaseIterable, Identifiable {
         switch self {
         case .visita: return "Visita"
         case .paqueteria: return "Paquetería"
-        case .reunion: return "Reunión/Evento"
+        case .reunion: return "Reunión / Evento"
+        }
+    }
+}
+
+// MARK: - Chips
+
+private struct GrupoChips<Content: View>: View {
+    let titulo: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(titulo.uppercased())
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.primary)
+
+            ChipsFlowLayout(spacing: 10) {
+                content()
+            }
+        }
+    }
+}
+
+private struct ChipOpcion: View {
+    let texto: String
+    let seleccionado: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
+                if seleccionado {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                Text(texto)
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundColor(.primary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(seleccionado ? Color.blue.opacity(0.18) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(seleccionado ? Color.clear : Color.gray.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Distribuye los chips en filas y salta de línea cuando no caben.
+private struct ChipsFlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, usedWidth: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > maxWidth {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            usedWidth = max(usedWidth, x - spacing)
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: usedWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }
@@ -565,38 +643,6 @@ struct ErrorPeticionDialog: View {
             Spacer(minLength: 0)
         }
         .background(Color.appBackground)
-    }
-}
-
-private struct CampoSelector<MenuContent: View>: View {
-    let label: String
-    let valor: String
-    @ViewBuilder let menuContent: () -> MenuContent
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
-
-            Menu {
-                menuContent()
-            } label: {
-                HStack {
-                    Text(valor)
-                        .font(.system(size: 15))
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                }
-                .padding(12)
-                .background(Color.fieldBackground)
-                .cornerRadius(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
-            }
-        }
     }
 }
 

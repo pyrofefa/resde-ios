@@ -14,6 +14,12 @@ class AuthService: ObservableObject {
     @Published var isLoading = false
 
     @Published var carouselData: CarouselData = CarouselData()
+    @Published var isLoadingCarousel = false
+
+    /// True solo en la primera carga (sin datos todavía), para mostrar el indicador con el logo.
+    var cargandoDatosHome: Bool {
+        isLoadingCarousel && carouselData.estadoAdeudos == nil
+    }
 
     private let baseURL = "https://resde.aseenti.com.mx/api/v1"
 
@@ -174,6 +180,7 @@ class AuthService: ObservableObject {
     }
 
     func loadCarouselDataInParallel(ubicacionId: String) async {
+        await MainActor.run { self.isLoadingCarousel = true }
         async let estadoAdeudos = fetchCarouselData(endpoint: "ubicaciones/estado-adeudos", params: ["ubicacion_id": ubicacionId])
         async let censo = fetchCarouselData(endpoint: "ubicaciones/censo", params: ["ubicacion_id": ubicacionId])
         async let mascotas = fetchCarouselData(endpoint: "ubicaciones/mascotas", params: ["ubicacion_id": ubicacionId])
@@ -211,6 +218,7 @@ class AuthService: ObservableObject {
                 tarjetas: parseCarouselResponse(tarjetasData, type: TarjetasResponse.self),
                 eventos: parseCarouselResponse(eventosData, type: EventosResponse.self)
             )
+            self.isLoadingCarousel = false
         }
     }
 
