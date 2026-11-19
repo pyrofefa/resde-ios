@@ -15,6 +15,7 @@ struct QuejasView: View {
     @State private var isLoading = true
     @State private var showCreateQueja = false
     @State private var showSuccessToast = false
+    @State private var selectedQueja: Queja?
 
     var body: some View {
         ZStack {
@@ -70,7 +71,10 @@ struct QuejasView: View {
                         } else {
                             VStack(spacing: 12) {
                                 ForEach(quejas, id: \.id) { queja in
-                                    QuejaCard(queja: queja)
+                                    Button(action: { selectedQueja = queja }) {
+                                        QuejaCard(queja: queja)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -101,6 +105,12 @@ struct QuejasView: View {
                     .padding(16)
                 }
             }
+        }
+        .sheet(item: $selectedQueja) { queja in
+            QuejaDetalleSheet(queja: queja)
+                .environmentObject(authService)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showCreateQueja) {
             CreateQuejaSheet(isPresented: $showCreateQueja, ubicacion: selectedUbicacion, onQuejaCreated: {
@@ -231,6 +241,9 @@ struct Queja: Codable, Identifiable {
     let ubicacion_id: Int
     let tipo: TipoQueja?
     let estatus: EstatusQueja?
+    let fecha_cierre: String?
+    let url_imagen_public: String?
+    let comentarios: String?
 }
 
 struct TipoQueja: Codable {
