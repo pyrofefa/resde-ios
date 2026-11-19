@@ -169,7 +169,10 @@ struct HomeContent: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 15)
 
-            ModulesSection(permissions: authService.user?.permissions ?? [])
+            ModulesSection(
+                permissions: authService.user?.permissions ?? [],
+                isSuperAdmin: authService.user?.is_super_admin ?? false
+            )
                 .padding(.horizontal, 16)
                 .padding(.top, 15)
                 .padding(.bottom, 24)
@@ -800,6 +803,7 @@ struct PanoramaContent: View {
 struct ModulesSection: View {
     @EnvironmentObject var authService: AuthService
     let permissions: [String]
+    let isSuperAdmin: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -811,6 +815,7 @@ struct ModulesSection: View {
             ModuleSectionGroup(
                 title: "PAGOS Y FINANZAS",
                 permissions: permissions,
+                isSuperAdmin: isSuperAdmin,
                 modules: [
                     ("pago.create", "Pagos", "creditcard.fill"),
                     ("pago.create", "Mensualidades", "calendar"),
@@ -821,6 +826,7 @@ struct ModulesSection: View {
             ModuleSectionGroup(
                 title: "MI HOGAR",
                 permissions: permissions,
+                isSuperAdmin: isSuperAdmin,
                 modules: [
                     ("censo.manage", "Censo", "person.2.fill"),
                     ("cuentasv.manage", "Cuentas Vinculadas", "building.2.fill"),
@@ -832,6 +838,7 @@ struct ModulesSection: View {
             ModuleSectionGroup(
                 title: "COMUNIDAD",
                 permissions: permissions,
+                isSuperAdmin: isSuperAdmin,
                 modules: [
                     ("evento.manage", "Eventos", "calendar"),
                     ("queja.manage", "Quejas", "exclamationmark.bubble.fill"),
@@ -842,6 +849,7 @@ struct ModulesSection: View {
             ModuleSectionGroup(
                 title: "ACCESOS",
                 permissions: permissions,
+                isSuperAdmin: isSuperAdmin,
                 modules: [
                     ("tarjetas.manage", "Tarjetas de acceso", "wifi.router.fill"),
                     (nil, "Claves de acceso", "key.fill"),
@@ -892,11 +900,13 @@ struct ModulesSection: View {
 struct ModuleSectionGroup: View {
     let title: String
     let permissions: [String]
+    let isSuperAdmin: Bool
     let modules: [(permission: String?, title: String, icon: String)]
 
     var visibleModules: [(String, String)] {
         modules.compactMap { module in
-            if module.permission == nil || permissions.contains(module.permission!) {
+            // Como en Android: el súper admin ve todos los módulos.
+            if isSuperAdmin || module.permission == nil || permissions.contains(module.permission!) {
                 return (module.title, module.icon)
             }
             return nil

@@ -309,8 +309,10 @@ class AuthService: ObservableObject {
             let nuevosPermissions = userData.permissions ?? actual.permissions
             let nuevosRoles = userData.roles ?? actual.roles
             let nuevasUbicaciones = userData.ubicaciones ?? actual.ubicaciones
+            let nuevoSuperAdmin = userData.is_super_admin ?? actual.is_super_admin
 
             let huboCambios = Set(nuevosPermissions) != Set(actual.permissions)
+                || nuevoSuperAdmin != actual.is_super_admin
                 || Set(nuevosRoles) != Set(actual.roles)
                 || nuevasUbicaciones != actual.ubicaciones
 
@@ -323,7 +325,7 @@ class AuthService: ObservableObject {
                 residencial_id: userData.residencial_id ?? actual.residencial_id,
                 residencial: userData.residencial ?? actual.residencial,
                 logo: userData.logo ?? actual.logo,
-                is_super_admin: userData.is_super_admin ?? actual.is_super_admin,
+                is_super_admin: nuevoSuperAdmin,
                 ubicaciones: nuevasUbicaciones,
                 roles: nuevosRoles,
                 permissions: nuevosPermissions
