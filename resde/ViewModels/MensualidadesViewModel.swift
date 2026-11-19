@@ -33,63 +33,82 @@ struct MensualidadesResponse: Codable {
     let message: String
 }
 
+struct DeudaPorAnio: Decodable, Identifiable {
+    var id: Int { anio }
+    let anio: Int
+    let totalPagado: Double
+    let deudaTotal: Double
+
+    private enum CodingKeys: String, CodingKey {
+        case anio
+        case totalPagado = "total_pagado"
+        case deudaTotal = "deuda_total"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        anio = try c.decode(Int.self, forKey: .anio)
+        totalPagado = (try? c.decode(FlexibleNumber.self, forKey: .totalPagado))?.value ?? 0
+        deudaTotal = (try? c.decode(FlexibleNumber.self, forKey: .deudaTotal))?.value ?? 0
+    }
+}
+
+struct DeudasPorAnioData: Decodable {
+    let deudaTotalAcumulada: Double
+    let deudasPorAnio: [DeudaPorAnio]
+
+    private enum CodingKeys: String, CodingKey {
+        case deudaTotalAcumulada = "deuda_total_acumulada"
+        case deudasPorAnio = "deudas_por_anio"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        deudaTotalAcumulada = (try? c.decode(FlexibleNumber.self, forKey: .deudaTotalAcumulada))?.value ?? 0
+        deudasPorAnio = (try? c.decode([DeudaPorAnio].self, forKey: .deudasPorAnio)) ?? []
+    }
+}
+
+struct DeudasPorAnioResponse: Decodable {
+    let success: Bool?
+    let data: DeudasPorAnioData?
+    let message: String?
+}
+
 @MainActor
 class MensualidadesViewModel: ObservableObject {
     @Published var isLoading = true
     @Published var deudaTotalAcumulada: Double = 0
-    @Published var years: [Int] = []
-    @Published var totalesPorAnio: [Int: MensualidadTotales] = [:]
+    @Published var deudas: [DeudaPorAnio] = []
     @Published var errorMessage = ""
     @Published var showError = false
 
     private let authService: AuthService
-    /// Cuántos años hacia atrás se buscan mensualidades.
-    private static let aniosAtras = 15
 
     init() {
         self.authService = AuthService(mockData: false)
         self.authService.loadTokenFromKeychain()
     }
 
+    /// Un solo request con todos los años que tienen adeudos/pagos (igual que Android).
     func loadResumen(ubicacionId: Int) async {
         isLoading = true
         showError = false
 
-        let currentYear = Calendar.current.component(.year, from: Date())
-        // Se consultan varios años en paralelo (incluyendo el siguiente, por pagos adelantados)
-        // y solo se muestran los que realmente tienen mensualidades.
-        let candidateYears = Array((currentYear - Self.aniosAtras)...(currentYear + 1))
-
-        if let adeudosData = await fetchData(endpoint: "ubicaciones/estado-adeudos", params: ["ubicacion_id": "\(ubicacionId)"]) {
-            if let response = try? JSONDecoder().decode(EstadoAdeudosResponse.self, from: adeudosData) {
-                self.deudaTotalAcumulada = response.data?.saldoPendiente ?? 0
-            }
+        guard let data = await fetchData(endpoint: "mantenimiento/deudas-por-anio", params: ["ubicacion_id": "\(ubicacionId)"]),
+              let response = try? JSONDecoder().decode(DeudasPorAnioResponse.self, from: data),
+              let info = response.data else {
+            deudas = []
+            deudaTotalAcumulada = 0
+            errorMessage = "No se pudo cargar el estado de deuda"
+            showError = true
+            isLoading = false
+            return
         }
 
-        var totales: [Int: MensualidadTotales] = [:]
-        await withTaskGroup(of: (Int, MensualidadesData?).self) { group in
-            for year in candidateYears {
-                group.addTask { [self] in
-                    guard let data = await fetchData(endpoint: "mantenimiento/mensualidades", params: ["ubicacion_id": "\(ubicacionId)", "anio": "\(year)"]),
-                          let response = try? JSONDecoder().decode(MensualidadesResponse.self, from: data) else {
-                        return (year, nil)
-                    }
-                    return (year, response.data)
-                }
-            }
-            for await (year, data) in group {
-                if let data, !data.mensualidades.isEmpty {
-                    totales[year] = data.totales
-                }
-            }
-        }
-
-        var yearsToShow = totales.keys.sorted(by: >)
-        if yearsToShow.isEmpty { yearsToShow = [currentYear] }
-
-        self.years = yearsToShow
-        self.totalesPorAnio = totales
-        self.isLoading = false
+        deudaTotalAcumulada = info.deudaTotalAcumulada
+        deudas = info.deudasPorAnio.sorted { $0.anio > $1.anio }
+        isLoading = false
     }
 
     private func fetchData(endpoint: String, params: [String: String]) async -> Data? {

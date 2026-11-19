@@ -59,9 +59,17 @@ struct MensualidadesView: View {
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
 
-                        ForEach(viewModel.years, id: \.self) { year in
-                            NavigationLink(destination: MensualidadesDetailView(year: year)) {
-                                YearDebtCard(year: year, totales: viewModel.totalesPorAnio[year])
+                        if viewModel.showError || viewModel.deudas.isEmpty {
+                            Text(viewModel.showError ? viewModel.errorMessage : "No hay información de adeudos")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(24)
+                        }
+
+                        ForEach(viewModel.deudas) { deuda in
+                            NavigationLink(destination: MensualidadesDetailView(year: deuda.anio)) {
+                                YearDebtCard(deuda: deuda)
                             }
                             .buttonStyle(.plain)
                         }
@@ -82,14 +90,13 @@ struct MensualidadesView: View {
 }
 
 struct YearDebtCard: View {
-    let year: Int
-    let totales: MensualidadTotales?
+    let deuda: DeudaPorAnio
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(String(year))
+                    Text(String(deuda.anio))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.primary)
                     Text("Adeudo de este año")
@@ -98,11 +105,11 @@ struct YearDebtCard: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 8) {
-                    Text("Pagado: $\(String(format: "%.2f", totales?.pagado ?? 0))")
+                    Text("Pagado: $\(String(format: "%.2f", deuda.totalPagado))")
                         .font(.system(size: 12))
                         .foregroundColor(Color.statusSuccess)
                     HStack(spacing: 4) {
-                        Text("$\(String(format: "%.2f", totales?.resta ?? 0))")
+                        Text("$\(String(format: "%.2f", deuda.deudaTotal))")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(Color.statusError)
                         Image(systemName: "chevron.right")

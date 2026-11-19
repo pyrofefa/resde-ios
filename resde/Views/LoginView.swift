@@ -16,6 +16,11 @@ struct LoginView: View {
 
     var body: some View {
         loginContent
+            .cargandoDialog(
+                isPresented: authService.isLoading,
+                titulo: "Iniciando sesión",
+                mensaje: "Verificando datos de acceso"
+            )
             .onChange(of: authService.errorMessage) { _, mensaje in
                 if let mensaje = mensaje {
                     errorAlert = ErrorPeticionMensaje(mensaje: mensaje)
