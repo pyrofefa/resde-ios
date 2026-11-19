@@ -95,7 +95,12 @@ class MensualidadesViewModel: ObservableObject {
         isLoading = true
         showError = false
 
-        guard let data = await fetchData(endpoint: "mantenimiento/deudas-por-anio", params: ["ubicacion_id": "\(ubicacionId)"]),
+        let rawData = await fetchData(endpoint: "mantenimiento/deudas-por-anio", params: ["ubicacion_id": "\(ubicacionId)"])
+        if let rawData, let texto = String(data: rawData, encoding: .utf8) {
+            print("📅 DEUDAS POR AÑO: \(texto)")
+        }
+
+        guard let data = rawData,
               let response = try? JSONDecoder().decode(DeudasPorAnioResponse.self, from: data),
               let info = response.data else {
             deudas = []
