@@ -8,6 +8,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var authService: AuthService
     @State private var cargaInicialHecha = false
+    @State private var actualizacion: ActualizacionDisponible?
     @State private var showUbicacionMenu = false
     @State private var showAperturaYTokens = false
     @State private var showAperturaToast = false
@@ -98,6 +99,24 @@ struct HomeView: View {
                         await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                     }
                 }
+            }
+            .task {
+                if let disponible = await UpdateChecker.buscarActualizacion() {
+                    actualizacion = disponible
+                }
+            }
+            .alert(
+                "Nueva versión disponible",
+                isPresented: Binding(
+                    get: { actualizacion != nil },
+                    set: { if !$0 { actualizacion = nil } }
+                ),
+                presenting: actualizacion
+            ) { disponible in
+                Button("Actualizar") { UIApplication.shared.open(disponible.url) }
+                Button("Más tarde", role: .cancel) {}
+            } message: { disponible in
+                Text("Hay una versión nueva (\(disponible.version)). Actualiza para tener las últimas mejoras y correcciones.")
             }
             .onReceive(NotificationCenter.default.publisher(for: .permisosActualizados)) { _ in
                 showPermisosActualizados = true
