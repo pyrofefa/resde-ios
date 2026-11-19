@@ -7,7 +7,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var authService: AuthService
-    @State private var selectedUbicacion: String = ""
+    @State private var cargaInicialHecha = false
     @State private var showUbicacionMenu = false
     @State private var showAperturaYTokens = false
     @State private var showAperturaToast = false
@@ -29,14 +29,10 @@ struct HomeView: View {
                     )
 
                     ScrollView {
-                        HomeContent(
-                            selectedUbicacion: $selectedUbicacion,
-                            showUbicacionMenu: $showUbicacionMenu
-                        )
+                        HomeContent(showUbicacionMenu: $showUbicacionMenu)
                     }
                     .refreshable {
-                        if let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == selectedUbicacion })?.key
-                            ?? authService.user?.ubicaciones.first?.key {
+                        if let ubicacionId = authService.ubicacionActualKey {
                             await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                         }
                     }
@@ -56,8 +52,7 @@ struct HomeView: View {
                     PermisosActualizadosOverlay(
                         onEntendido: {
                             showPermisosActualizados = false
-                            if let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == selectedUbicacion })?.key
-                                ?? authService.user?.ubicaciones.first?.key {
+                            if let ubicacionId = authService.ubicacionActualKey {
                                 Task {
                                     await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                                 }
@@ -90,17 +85,15 @@ struct HomeView: View {
                 if PushNotificationManager.shared.abrirHistorialPendiente {
                     abrirHistorialDesdeNotificacion()
                 }
-                if selectedUbicacion.isEmpty, let ubicaciones = authService.user?.ubicaciones {
-                    if let firstLocation = ubicaciones.sorted(by: { $0.key < $1.key }).first {
-                        selectedUbicacion = firstLocation.value
-                        Task {
-                            await authService.loadCarouselDataInParallel(ubicacionId: firstLocation.key)
-                        }
+                if !cargaInicialHecha, let ubicacionId = authService.ubicacionActualKey {
+                    cargaInicialHecha = true
+                    Task {
+                        await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                     }
                 }
             }
-            .onChange(of: selectedUbicacion) { oldValue, newValue in
-                if !newValue.isEmpty, let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == newValue })?.key {
+            .onChange(of: authService.ubicacionActualKey) { _, nueva in
+                if cargaInicialHecha, let ubicacionId = nueva {
                     Task {
                         await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                     }
@@ -111,7 +104,7 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showAperturaYTokens) {
                 AperturaYTokensSheet(
-                    ubicacionId: Int(authService.user?.ubicaciones.first?.key ?? ""),
+                    ubicacionId: authService.ubicacionActualId,
                     onAperturaResultado: { mensaje in
                         mostrarAperturaToast(mensaje)
                     }
@@ -147,7 +140,6 @@ struct HomeView: View {
 // MARK: - HomeContent
 struct HomeContent: View {
     @EnvironmentObject var authService: AuthService
-    @Binding var selectedUbicacion: String
     @Binding var showUbicacionMenu: Bool
 
     var body: some View {
@@ -156,7 +148,10 @@ struct HomeContent: View {
                 .padding(16)
 
             UbicacionCard(
-                selectedUbicacion: $selectedUbicacion,
+                selectedKey: Binding(
+                    get: { authService.ubicacionActualKey ?? "" },
+                    set: { authService.seleccionarUbicacion($0) }
+                ),
                 ubicaciones: authService.user?.ubicaciones ?? [:],
                 showMenu: $showUbicacionMenu
             )
@@ -346,7 +341,7 @@ struct HomeHeader: View {
 
 // MARK: - UbicacionCard
 struct UbicacionCard: View {
-    @Binding var selectedUbicacion: String
+    @Binding var selectedKey: String
     let ubicaciones: [String: String]
     @Binding var showMenu: Bool
 
@@ -363,7 +358,7 @@ struct UbicacionCard: View {
                         .foregroundColor(.secondary)
                         .textCase(.uppercase)
 
-                    Text(selectedUbicacion)
+                    Text(ubicaciones[selectedKey] ?? "")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.primary)
                 }
@@ -385,7 +380,7 @@ struct UbicacionCard: View {
 
             if showMenu {
                 UbicacionMenuContent(
-                    selectedUbicacion: $selectedUbicacion,
+                    selectedKey: $selectedKey,
                     ubicaciones: ubicaciones,
                     showMenu: $showMenu
                 )
@@ -398,7 +393,7 @@ struct UbicacionCard: View {
 }
 
 struct UbicacionMenuContent: View {
-    @Binding var selectedUbicacion: String
+    @Binding var selectedKey: String
     let ubicaciones: [String: String]
     @Binding var showMenu: Bool
 
@@ -408,10 +403,11 @@ struct UbicacionMenuContent: View {
         VStack(alignment: .leading, spacing: 0) {
             let sortedUbicaciones = Array(ubicaciones.sorted(by: { $0.key < $1.key }))
             ForEach(sortedUbicaciones.indices, id: \.self) { index in
+                let key = sortedUbicaciones[index].key
                 let value = sortedUbicaciones[index].value
 
                 Button(action: {
-                    selectedUbicacion = value
+                    selectedKey = key
                     withAnimation {
                         showMenu = false
                     }
@@ -423,7 +419,7 @@ struct UbicacionMenuContent: View {
 
                         Spacer()
 
-                        if selectedUbicacion == value {
+                        if selectedKey == key {
                             Image(systemName: "checkmark")
                                 .foregroundColor(.blue)
                         }

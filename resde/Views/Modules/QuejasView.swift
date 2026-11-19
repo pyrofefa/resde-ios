@@ -117,7 +117,7 @@ struct QuejasView: View {
         }
         .onAppear {
             if selectedUbicacion.isEmpty {
-                selectedUbicacion = authService.user?.ubicaciones.first?.value ?? ""
+                selectedUbicacion = authService.ubicacionActualNombre ?? ""
             }
             loadQuejas()
         }
@@ -126,7 +126,7 @@ struct QuejasView: View {
     private func loadQuejas() {
         Task {
             isLoading = true
-            if let ubicacionId = authService.user?.ubicaciones.first?.key {
+            if let ubicacionId = authService.ubicacionActualKey {
                 if let data = await fetchQuejas(ubicacionId: ubicacionId) {
                     if let jsonString = String(data: data, encoding: .utf8) {
                         print("📋 QUEJAS RESPONSE: \(jsonString)")
@@ -484,7 +484,7 @@ struct CreateQuejaSheet: View {
     }
 
     private func createQueja() async {
-        guard let ubicacionId = authService.user?.ubicaciones.first?.key,
+        guard let ubicacionId = authService.ubicacionActualKey,
               let tipoId = selectedTipo?.id,
               let userId = authService.user?.id else {
             isSubmitting = false

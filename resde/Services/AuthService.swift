@@ -16,6 +16,31 @@ class AuthService: ObservableObject {
     @Published var carouselData: CarouselData = CarouselData()
     @Published var isLoadingCarousel = false
 
+    // MARK: - Ubicación seleccionada (compartida por toda la app, como en Android)
+
+    private static let ubicacionSeleccionadaDefaultsKey = "ubicacionSeleccionadaKey"
+    @Published private(set) var ubicacionSeleccionadaKey: String? =
+        UserDefaults.standard.string(forKey: "ubicacionSeleccionadaKey")
+
+    /// Ubicación activa: la elegida si sigue siendo válida; si no, la primera (ordenada por id).
+    var ubicacionActualKey: String? {
+        guard let ubicaciones = user?.ubicaciones, !ubicaciones.isEmpty else { return nil }
+        if let elegida = ubicacionSeleccionadaKey, ubicaciones[elegida] != nil { return elegida }
+        return ubicaciones.keys.sorted().first
+    }
+
+    var ubicacionActualId: Int? { ubicacionActualKey.flatMap { Int($0) } }
+
+    var ubicacionActualNombre: String? {
+        ubicacionActualKey.flatMap { user?.ubicaciones[$0] }
+    }
+
+    func seleccionarUbicacion(_ key: String) {
+        guard user?.ubicaciones[key] != nil else { return }
+        ubicacionSeleccionadaKey = key
+        UserDefaults.standard.set(key, forKey: Self.ubicacionSeleccionadaDefaultsKey)
+    }
+
     /// True solo en la primera carga (sin datos todavía), para mostrar el indicador con el logo.
     var cargandoDatosHome: Bool {
         isLoadingCarousel && carouselData.estadoAdeudos == nil
@@ -153,6 +178,8 @@ class AuthService: ObservableObject {
         token = nil
         errorMessage = nil
         deleteToken()
+        ubicacionSeleccionadaKey = nil
+        UserDefaults.standard.removeObject(forKey: Self.ubicacionSeleccionadaDefaultsKey)
         UserDefaults.standard.removeObject(forKey: "currentUser")
     }
 

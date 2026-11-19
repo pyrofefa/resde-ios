@@ -4,21 +4,15 @@ struct CuentasView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel = CuentasViewModel()
     @EnvironmentObject var authService: AuthService
-    @State private var ubicacionId: Int?
     @State private var showNuevaCuenta = false
     @State private var toastMensaje: String?
 
-    private var ubicaciones: [(key: String, value: String)] {
-        (authService.user?.ubicaciones ?? [:]).sorted { $0.key < $1.key }.map { (key: $0.key, value: $0.value) }
-    }
-
     private var ubicacionNombre: String {
-        if let id = ubicacionId, let u = ubicaciones.first(where: { Int($0.key) == id }) { return u.value }
-        return ubicaciones.first?.value ?? "N/A"
+        authService.ubicacionActualNombre ?? "N/A"
     }
 
     private func recargar() async {
-        guard let id = ubicacionId else { return }
+        guard let id = authService.ubicacionActualId else { return }
         await viewModel.loadCuentas(ubicacionId: id)
     }
 
@@ -64,19 +58,6 @@ struct CuentasView: View {
                                 .foregroundColor(.primary)
                         }
                         Spacer()
-                        if ubicaciones.count > 1 {
-                            Menu {
-                                ForEach(ubicaciones, id: \.key) { u in
-                                    Button(u.value) {
-                                        ubicacionId = Int(u.key)
-                                        Task { await recargar() }
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
                     }
                     .padding(16)
                     .background(Color.cardBackground)
@@ -150,7 +131,7 @@ struct CuentasView: View {
         .sheet(isPresented: $showNuevaCuenta) {
             NuevaCuentaSheet(
                 viewModel: viewModel,
-                ubicacionId: ubicacionId ?? 0,
+                ubicacionId: authService.ubicacionActualId ?? 0,
                 ubicacionNombre: ubicacionNombre,
                 isPresented: $showNuevaCuenta,
                 onCreada: accionCompletada
@@ -171,7 +152,7 @@ struct CuentasView: View {
                 .cornerRadius(28)
             }
             .padding(16)
-            .disabled(ubicacionId == nil)
+            .disabled(authService.ubicacionActualId == nil)
         }
         .overlay(alignment: .bottom) {
             if let mensaje = toastMensaje {
@@ -182,9 +163,6 @@ struct CuentasView: View {
             }
         }
         .onAppear {
-            if ubicacionId == nil {
-                ubicacionId = Int(ubicaciones.first?.key ?? "")
-            }
             Task { await recargar() }
         }
     }

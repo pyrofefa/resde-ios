@@ -20,7 +20,7 @@ struct HistorialAccesosView: View {
     }
 
     private var ubicacionId: Int? {
-        Int(authService.user?.ubicaciones.first?.key ?? "")
+        Int(authService.ubicacionActualKey ?? "")
     }
 
     var body: some View {
@@ -55,7 +55,7 @@ struct HistorialAccesosView: View {
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(.secondary)
                                 .textCase(.uppercase)
-                            Text(authService.user?.ubicaciones.first?.value ?? "N/A")
+                            Text(authService.ubicacionActualNombre ?? "N/A")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.primary)
                         }

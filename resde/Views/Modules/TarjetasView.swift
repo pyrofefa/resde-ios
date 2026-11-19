@@ -16,7 +16,7 @@ struct TarjetasView: View {
     @State private var toastMensaje: String?
 
     private var ubicacionIdActual: String? {
-        authService.user?.ubicaciones.sorted { $0.key < $1.key }.first?.key
+        authService.ubicacionActualKey
     }
 
     var body: some View {
@@ -127,7 +127,7 @@ struct TarjetasView: View {
         }
         .onAppear {
             if selectedUbicacion.isEmpty {
-                selectedUbicacion = authService.user?.ubicaciones.sorted { $0.key < $1.key }.first?.value ?? ""
+                selectedUbicacion = authService.ubicacionActualNombre ?? ""
             }
             loadTarjetas()
         }

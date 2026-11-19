@@ -37,7 +37,7 @@ struct MensualidadesDetailView: View {
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(.secondary)
                                     .textCase(.uppercase)
-                                Text(viewModel.direccion.isEmpty ? (authService.user?.ubicaciones.first?.value ?? "N/A") : viewModel.direccion)
+                                Text(viewModel.direccion.isEmpty ? (authService.ubicacionActualNombre ?? "N/A") : viewModel.direccion)
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
                             }
@@ -133,7 +133,7 @@ struct MensualidadesDetailView: View {
         .background(Color.appBackground)
         .navigationBarBackButtonHidden()
         .onAppear {
-            guard let ubicacionId = Int(authService.user?.ubicaciones.first?.key ?? "") else { return }
+            guard let ubicacionId = Int(authService.ubicacionActualKey ?? "") else { return }
             Task {
                 await viewModel.loadMensualidades(ubicacionId: ubicacionId, anio: year)
             }

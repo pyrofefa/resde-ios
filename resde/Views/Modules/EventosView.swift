@@ -571,7 +571,7 @@ struct CreateEventoSheet: View {
     let onEventoCreated: () -> Void
 
     var ubicacionTexto: String {
-        authService.user?.ubicaciones.first?.value ?? "N/A"
+        authService.ubicacionActualNombre ?? "N/A"
     }
 
     var residenteTexto: String {
@@ -838,7 +838,7 @@ struct CreateEventoSheet: View {
     }
 
     private func createEvento() async {
-        guard let ubicacionIdStr = authService.user?.ubicaciones.sorted(by: { $0.key < $1.key }).first?.key,
+        guard let ubicacionIdStr = authService.ubicacionActualKey,
               let ubicacionId = Int(ubicacionIdStr) else {
             isSubmitting = false
             showResumen = false
@@ -1103,7 +1103,7 @@ struct DetalleReservaSheet: View {
                     VStack(spacing: 12) {
                         DetalleFila(label: "Fecha", value: evento.fecha_inicio ?? "N/A")
                         DetalleFila(label: "Horario", value: "\(evento.hora_inicio ?? "")  - \(evento.hora_fin ?? "")")
-                        DetalleFila(label: "Ubicación", value: authService.user?.ubicaciones.first?.value ?? "N/A", boldValue: true)
+                        DetalleFila(label: "Ubicación", value: authService.ubicacionActualNombre ?? "N/A", boldValue: true)
                         DetalleFila(label: "Residente", value: evento.reserva_residente?.nombre_completo ?? "N/A")
                         DetalleFila(label: "Estatus Pago", value: estatusTexto, boldValue: true)
                     }
