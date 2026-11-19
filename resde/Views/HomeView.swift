@@ -14,9 +14,10 @@ struct HomeView: View {
     @State private var aperturaToastMensaje = ""
     @State private var showConfirmarLogout = false
     @State private var showPermisosActualizados = false
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 Color.appBackground
                     .ignoresSafeArea()
@@ -82,7 +83,13 @@ struct HomeView: View {
                     .transition(.opacity)
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .abrirHistorialAccesos)) { _ in
+                abrirHistorialDesdeNotificacion()
+            }
             .onAppear {
+                if PushNotificationManager.shared.abrirHistorialPendiente {
+                    abrirHistorialDesdeNotificacion()
+                }
                 if selectedUbicacion.isEmpty, let ubicaciones = authService.user?.ubicaciones {
                     if let firstLocation = ubicaciones.sorted(by: { $0.key < $1.key }).first {
                         selectedUbicacion = firstLocation.value
@@ -114,6 +121,13 @@ struct HomeView: View {
                 .presentationDragIndicator(.hidden)
             }
         }
+    }
+
+    private func abrirHistorialDesdeNotificacion() {
+        PushNotificationManager.shared.abrirHistorialPendiente = false
+        showAperturaYTokens = false
+        path = NavigationPath()
+        path.append("Historial de accesos")
     }
 
     private func mostrarAperturaToast(_ mensaje: String) {
