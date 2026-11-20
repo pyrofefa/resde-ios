@@ -571,7 +571,7 @@ struct CreateEventoSheet: View {
     let onEventoCreated: () -> Void
 
     var ubicacionTexto: String {
-        authService.user?.ubicaciones.first?.value ?? "N/A"
+        authService.ubicacionActualNombre ?? "N/A"
     }
 
     var residenteTexto: String {
@@ -587,8 +587,20 @@ struct CreateEventoSheet: View {
         Date().addingTimeInterval(36 * 3600)
     }
 
+    /// Duración calculada solo con hora y minuto (ambas horas se mandan como "HH:mm" del mismo día).
     var duracionEnHoras: Double {
-        horaFin.timeIntervalSince(horaInicio) / 3600
+        func minutosDelDia(_ fecha: Date) -> Int {
+            let c = Calendar.current.dateComponents([.hour, .minute], from: fecha)
+            return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        }
+        return Double(minutosDelDia(horaFin) - minutosDelDia(horaInicio)) / 60
+    }
+
+    /// Fin sugerido: inicio + 5 h, sin pasar de las 23:59 del mismo día.
+    func finSugerido(para inicio: Date) -> Date {
+        let sugerido = inicio.addingTimeInterval(5 * 3600)
+        if Calendar.current.isDate(sugerido, inSameDayAs: inicio) { return sugerido }
+        return Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: inicio) ?? inicio
     }
 
     var duracionValida: Bool {
@@ -728,7 +740,7 @@ struct CreateEventoSheet: View {
                                 DatePicker("", selection: $horaInicio, displayedComponents: .hourAndMinute)
                                     .datePickerStyle(.compact)
                                     .onChange(of: horaInicio) { _, nuevoInicio in
-                                        horaFin = nuevoInicio.addingTimeInterval(5 * 3600)
+                                        horaFin = finSugerido(para: nuevoInicio)
                                     }
                             }
 
@@ -767,6 +779,10 @@ struct CreateEventoSheet: View {
                     }
 
                     Button(action: {
+                        guard duracionEnHoras > 0 else {
+                            mostrarToast("La hora de fin debe ser posterior a la de inicio")
+                            return
+                        }
                         guard duracionValida else {
                             mostrarToast("La duración máxima de un evento es de 5 horas")
                             return
@@ -798,7 +814,7 @@ struct CreateEventoSheet: View {
         .onAppear {
             let validDate = max(fechaPreseleccionada, fechaMinima)
             fechaEvento = validDate
-            horaFin = horaInicio.addingTimeInterval(5 * 3600)
+            horaFin = finSugerido(para: horaInicio)
         }
         .sheet(isPresented: $showResumen) {
             ResumenReservaSheet(
@@ -822,7 +838,7 @@ struct CreateEventoSheet: View {
     }
 
     private func createEvento() async {
-        guard let ubicacionIdStr = authService.user?.ubicaciones.first?.key,
+        guard let ubicacionIdStr = authService.ubicacionActualKey,
               let ubicacionId = Int(ubicacionIdStr) else {
             isSubmitting = false
             showResumen = false
@@ -831,10 +847,12 @@ struct CreateEventoSheet: View {
         }
 
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         let fechaStr = formatter.string(from: fechaEvento)
 
         let horaFormatter = DateFormatter()
+        horaFormatter.locale = Locale(identifier: "en_US_POSIX")
         horaFormatter.dateFormat = "HH:mm"
         let horaInicioStr = horaFormatter.string(from: horaInicio)
         let horaFinStr = horaFormatter.string(from: horaFin)
@@ -849,6 +867,7 @@ struct CreateEventoSheet: View {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(authService.token ?? "")", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let params: [String: Any] = [
@@ -1084,7 +1103,7 @@ struct DetalleReservaSheet: View {
                     VStack(spacing: 12) {
                         DetalleFila(label: "Fecha", value: evento.fecha_inicio ?? "N/A")
                         DetalleFila(label: "Horario", value: "\(evento.hora_inicio ?? "")  - \(evento.hora_fin ?? "")")
-                        DetalleFila(label: "Ubicación", value: authService.user?.ubicaciones.first?.value ?? "N/A", boldValue: true)
+                        DetalleFila(label: "Ubicación", value: authService.ubicacionActualNombre ?? "N/A", boldValue: true)
                         DetalleFila(label: "Residente", value: evento.reserva_residente?.nombre_completo ?? "N/A")
                         DetalleFila(label: "Estatus Pago", value: estatusTexto, boldValue: true)
                     }

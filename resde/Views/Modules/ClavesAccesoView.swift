@@ -15,7 +15,7 @@ struct ClavesAccesoView: View {
     private let botNumero = "14807419374"
 
     private var ubicacionId: Int? {
-        Int(authService.user?.ubicaciones.first?.key ?? "")
+        Int(authService.ubicacionActualKey ?? "")
     }
 
     var body: some View {
@@ -46,7 +46,7 @@ struct ClavesAccesoView: View {
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(.secondary)
                                     .textCase(.uppercase)
-                                Text(authService.user?.ubicaciones.first?.value ?? "N/A")
+                                Text(authService.ubicacionActualNombre ?? "N/A")
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
                             }
@@ -392,11 +392,9 @@ private struct ClaveAccesoCard: View {
             .cornerRadius(10)
 
             VStack(alignment: .leading, spacing: 2) {
-                if let limite = clave.limite_usos {
-                    Text("Usos restantes: \(clave.usos_restantes ?? 0) (Límite: \(limite))")
-                } else {
-                    Text("Usos ilimitados")
-                }
+                let limite = clave.limite_usos ?? 0
+                let restantes = clave.usos_restantes ?? (limite - (clave.usos_registrados ?? 0))
+                Text("Usos restantes: \(restantes) (Límite: \(limite == 0 ? "Ilimitados" : String(limite)))")
                 Text("Válido hasta: \(fechaFormateada)")
             }
             .font(.system(size: 13))

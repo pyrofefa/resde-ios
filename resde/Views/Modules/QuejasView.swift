@@ -15,6 +15,7 @@ struct QuejasView: View {
     @State private var isLoading = true
     @State private var showCreateQueja = false
     @State private var showSuccessToast = false
+    @State private var selectedQueja: Queja?
 
     var body: some View {
         ZStack {
@@ -70,7 +71,10 @@ struct QuejasView: View {
                         } else {
                             VStack(spacing: 12) {
                                 ForEach(quejas, id: \.id) { queja in
-                                    QuejaCard(queja: queja)
+                                    Button(action: { selectedQueja = queja }) {
+                                        QuejaCard(queja: queja)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -102,6 +106,12 @@ struct QuejasView: View {
                 }
             }
         }
+        .sheet(item: $selectedQueja) { queja in
+            QuejaDetalleSheet(queja: queja)
+                .environmentObject(authService)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showCreateQueja) {
             CreateQuejaSheet(isPresented: $showCreateQueja, ubicacion: selectedUbicacion, onQuejaCreated: {
                 loadQuejas()
@@ -117,7 +127,7 @@ struct QuejasView: View {
         }
         .onAppear {
             if selectedUbicacion.isEmpty {
-                selectedUbicacion = authService.user?.ubicaciones.first?.value ?? ""
+                selectedUbicacion = authService.ubicacionActualNombre ?? ""
             }
             loadQuejas()
         }
@@ -126,7 +136,7 @@ struct QuejasView: View {
     private func loadQuejas() {
         Task {
             isLoading = true
-            if let ubicacionId = authService.user?.ubicaciones.first?.key {
+            if let ubicacionId = authService.ubicacionActualKey {
                 if let data = await fetchQuejas(ubicacionId: ubicacionId) {
                     if let jsonString = String(data: data, encoding: .utf8) {
                         print("📋 QUEJAS RESPONSE: \(jsonString)")
@@ -231,6 +241,9 @@ struct Queja: Codable, Identifiable {
     let ubicacion_id: Int
     let tipo: TipoQueja?
     let estatus: EstatusQueja?
+    let fecha_cierre: String?
+    let url_imagen_public: String?
+    let comentarios: String?
 }
 
 struct TipoQueja: Codable {
@@ -484,7 +497,7 @@ struct CreateQuejaSheet: View {
     }
 
     private func createQueja() async {
-        guard let ubicacionId = authService.user?.ubicaciones.first?.key,
+        guard let ubicacionId = authService.ubicacionActualKey,
               let tipoId = selectedTipo?.id,
               let userId = authService.user?.id else {
             isSubmitting = false

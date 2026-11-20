@@ -13,7 +13,11 @@ struct TarjetasView: View {
     @State private var tarjetas: [Tarjeta] = []
     @State private var isLoading = true
     @State private var selectedTarjeta: Tarjeta?
-    @State private var showDeactivateSheet = false
+    @State private var toastMensaje: String?
+
+    private var ubicacionIdActual: String? {
+        authService.ubicacionActualKey
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,7 +90,6 @@ struct TarjetasView: View {
                                 ForEach(tarjetas, id: \.id) { tarjeta in
                                     Button(action: {
                                         selectedTarjeta = tarjeta
-                                        showDeactivateSheet = true
                                     }) {
                                         TarjetaCard(tarjeta: tarjeta)
                                     }
@@ -106,13 +109,25 @@ struct TarjetasView: View {
         .background(Color.appBackground)
         .navigationBarBackButtonHidden()
         .sheet(item: $selectedTarjeta) { tarjeta in
-            DeactivateTarjetaSheet(tarjeta: tarjeta, isPresented: $showDeactivateSheet)
-                .presentationDetents([.fraction(0.45)])
-                .presentationDragIndicator(.visible)
+            DeactivateTarjetaSheet(tarjeta: tarjeta) {
+                await darDeBaja(tarjeta)
+            } onCompletada: { mensaje in
+                mostrarToast(mensaje)
+            }
+            .presentationDetents([.fraction(0.5)])
+            .presentationDragIndicator(.visible)
+        }
+        .overlay(alignment: .bottom) {
+            if let mensaje = toastMensaje {
+                SuccessToast(message: mensaje)
+                    .padding(.bottom, 24)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
         }
         .onAppear {
             if selectedUbicacion.isEmpty {
-                selectedUbicacion = authService.user?.ubicaciones.first?.value ?? ""
+                selectedUbicacion = authService.ubicacionActualNombre ?? ""
             }
             loadTarjetas()
         }
@@ -121,7 +136,7 @@ struct TarjetasView: View {
     private func loadTarjetas() {
         Task {
             isLoading = true
-            if let ubicacionId = authService.user?.ubicaciones.first?.key {
+            if let ubicacionId = ubicacionIdActual {
                 if let data = await fetchTarjetas(ubicacionId: ubicacionId) {
                     if let jsonString = String(data: data, encoding: .utf8) {
                         print("📋 TARJETAS RESPONSE: \(jsonString)")
@@ -137,12 +152,58 @@ struct TarjetasView: View {
         }
     }
 
+    private func mostrarToast(_ mensaje: String) {
+        withAnimation { toastMensaje = mensaje }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            withAnimation { toastMensaje = nil }
+        }
+    }
+
+    /// POST /tarjetas/deactivate { "id": <id> } (igual que Android). Si sale bien, quita la tarjeta de la lista.
+    private func darDeBaja(_ tarjeta: Tarjeta) async -> (exito: Bool, mensaje: String) {
+        guard let id = tarjeta.id, let token = authService.token,
+              let url = URL(string: "https://resde.aseenti.com.mx/api/v1/tarjetas/deactivate") else {
+            return (false, "No se pudo procesar la baja")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["id": id])
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            checkTokenInvalido(response)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            print("💳 tarjetas/deactivate Status: \(status)")
+
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let mensaje = json?["message"] as? String
+
+            if (200...299).contains(status), (json?["success"] as? Bool) != false {
+                tarjetas.removeAll { $0.id == id }
+                return (true, mensaje ?? "Tarjeta dada de baja correctamente")
+            }
+            if let errors = json?["errors"] as? [String: Any],
+               let primero = errors.values.compactMap({ ($0 as? [String])?.first }).first {
+                return (false, primero)
+            }
+            return (false, mensaje ?? "Error al procesar la baja")
+        } catch {
+            print("❌ Error al dar de baja tarjeta: \(error)")
+            return (false, "Error de conexión o servidor")
+        }
+    }
+
     private func fetchTarjetas(ubicacionId: String) async -> Data? {
         guard let url = URL(string: "https://resde.aseenti.com.mx/api/v1/tarjetas/get?ubicacion_id=\(ubicacionId)") else {
             return nil
         }
 
         var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         print("🌐 Tarjetas URL: \(url.absoluteString)")
         print("🔑 Token: \(authService.token ?? "NIL")")
 
@@ -169,11 +230,20 @@ struct TarjetaCard: View {
     let tarjeta: Tarjeta
 
     var statusColor: Color {
-        tarjeta.status == 1 ? Color.statusSuccess : Color.statusError
+        switch tarjeta.status {
+        case 1: return Color.statusSuccess
+        case 2: return Color.statusWarning
+        default: return Color.statusError
+        }
     }
 
     var statusText: String {
-        tarjeta.status == 1 ? "Activa" : "DESACTIVADA"
+        switch tarjeta.status {
+        case 1: return "Activa"
+        case 2: return "PENDIENTE BAJA"
+        case 3: return "DESACTIVADA"
+        default: return "Estado desconocido"
+        }
     }
 
     var body: some View {
@@ -205,8 +275,13 @@ struct TarjetaCard: View {
 struct DeactivateTarjetaSheet: View {
     @Environment(\.dismiss) var dismiss
     let tarjeta: Tarjeta
-    @Binding var isPresented: Bool
+    /// Ejecuta la baja en el servidor y devuelve el resultado.
+    let onConfirmar: () async -> (exito: Bool, mensaje: String)
+    /// Se llama tras una baja exitosa, con el mensaje del servidor.
+    let onCompletada: (String) -> Void
+
     @State private var isDeactivating = false
+    @State private var errorAlert: ErrorPeticionMensaje?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -259,8 +334,12 @@ struct DeactivateTarjetaSheet: View {
                         }
                     }) {
                         HStack(spacing: 8) {
-                            Image(systemName: "trash.fill")
-                            Text("Dar de baja tarjeta")
+                            if isDeactivating {
+                                ProgressView().tint(.white)
+                            } else {
+                                Image(systemName: "trash.fill")
+                            }
+                            Text(isDeactivating ? "Procesando..." : "Dar de baja tarjeta")
                         }
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
@@ -294,14 +373,21 @@ struct DeactivateTarjetaSheet: View {
             Spacer()
         }
         .background(Color.cardBackground)
+        .sheet(item: $errorAlert) { error in
+            ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: { errorAlert = nil })
+                .presentationDetents([.fraction(0.45)])
+        }
     }
 
     private func deactivateTarjeta() async {
-        // Placeholder for API call to deactivate tarjeta
-        print("Deactivating tarjeta: \(tarjeta.numero_tarjeta ?? "N/A")")
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-        await MainActor.run {
-            isPresented = false
+        let resultado = await onConfirmar()
+        isDeactivating = false
+
+        if resultado.exito {
+            dismiss()
+            onCompletada(resultado.mensaje)
+        } else {
+            errorAlert = ErrorPeticionMensaje(mensaje: resultado.mensaje)
         }
     }
 }
