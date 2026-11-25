@@ -113,7 +113,7 @@ struct AperturaYTokensSheet: View {
             }
         }
         .sheet(item: $tokenGenerado) { token in
-            TokenGeneradoSheet(token: token, onCerrar: {
+            TokenGeneradoSheet(token: token, residencialFallback: authService.user?.residencial, onCerrar: {
                 // Solo cerramos la sheet de afuera: al hacerlo, SwiftUI cierra junto
                 // con ella la de "código generado" en una sola animación, sin que se
                 // alcance a ver de regreso el formulario de "Generar Código".
@@ -289,12 +289,14 @@ private struct GenerarCodigoTabView: View {
     @State private var vigenciaHoras = 24
     @State private var limiteUsos = 1
     @State private var fechaEvento = Date()
+    @State private var descripcion = ""
     @State private var isSubmitting = false
     @State private var errorPeticion: ErrorPeticionMensaje?
 
     private let opcionesVigencia = [3, 6, 12, 24]
     private let opcionesLimite = [1, 2, 0]
     private let diasMaximosEvento = 15
+    private let maxCaracteresDescripcion = 100
 
     private var fechaMaximaEvento: Date {
         Calendar.current.date(byAdding: .day, value: diasMaximosEvento, to: Date()) ?? Date()
@@ -388,6 +390,25 @@ private struct GenerarCodigoTabView: View {
                     .padding(10)
                     .background(Color.blue.opacity(0.08))
                     .cornerRadius(8)
+
+                    VStack(alignment: .trailing, spacing: 4) {
+                        TextField("Descripción del evento (opcional)", text: $descripcion, axis: .vertical)
+                            .lineLimit(3...5)
+                            .font(.system(size: 15))
+                            .padding(12)
+                            .background(Color.fieldBackground)
+                            .cornerRadius(10)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                            .onChange(of: descripcion) { _, nuevo in
+                                if nuevo.count > maxCaracteresDescripcion {
+                                    descripcion = String(nuevo.prefix(maxCaracteresDescripcion))
+                                }
+                            }
+
+                        Text("\(descripcion.count)/\(maxCaracteresDescripcion)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
 
                 case .visita:
                     GrupoChips(titulo: "Vigencia") {
@@ -483,6 +504,12 @@ private struct GenerarCodigoTabView: View {
             params["limite_usos"] = 20
             params["duracion_horas"] = duracionHoras
             params["fecha_expiracion"] = dateFormatter.string(from: fechaEvento)
+
+            // La descripción es opcional y solo aplica a reuniones (como Android).
+            let descripcionLimpia = descripcion.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !descripcionLimpia.isEmpty {
+                params["descripcion"] = descripcionLimpia
+            }
 
         case .paqueteria:
             // Sin fecha_expiracion: el servidor la calcula con duracion_horas (igual que Android).
@@ -681,6 +708,9 @@ struct ClaveAccesoGenerada: Decodable, Identifiable {
     var id: String { token ?? UUID().uuidString }
     let token: String?
     let nombre: String?
+    let descripcion: String?
+    let ubicacion_nombre: String?
+    let residencial: String?
     let tipo_acceso: String?
     let limite_usos: Int?
     let usos_restantes: Int?
@@ -702,24 +732,58 @@ struct ClaveAccesoErrorResponse: Decodable {
 
 struct TokenGeneradoSheet: View {
     let token: ClaveAccesoGenerada
+    var residencialFallback: String? = nil
     let onCerrar: () -> Void
 
     @State private var copiado = false
 
     private let botNumero = "14807419374"
 
+    /// Enlace del botón del chat: "Hola, mi código de acceso es {token}" (como Android).
     private var whatsappLink: String {
-        let mensaje = token.token ?? ""
+        let mensaje = "Hola, mi código de acceso es \(token.token ?? "")"
         let encoded = mensaje.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? mensaje
         return "https://wa.me/\(botNumero)?text=\(encoded)"
     }
 
+    private var descripcionLimpia: String? {
+        let texto = token.descripcion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return texto.isEmpty ? nil : texto
+    }
+
+    private var etiquetaNombre: String {
+        let nombre = token.nombre ?? ""
+        if let descripcion = descripcionLimpia {
+            return "Evento/Reunión: \(nombre)\n💬 \(descripcion)"
+        }
+        return "Visitante: \(nombre)"
+    }
+
+    private var etiquetaVigencia: String {
+        var texto = ""
+        if let ubicacion = token.ubicacion_nombre, !ubicacion.isEmpty {
+            texto += "Ubicación: \(ubicacion)\n"
+        }
+        texto += "Válido hasta: \(fechaFormateada)"
+        return texto
+    }
+
     private var mensajeCompartir: String {
-        "Tu código de acceso es: \(token.token ?? ""). Envíalo a nuestro asistente RESDE Guard: \(whatsappLink)"
+        let residencial = token.residencial ?? residencialFallback ?? "Residencial"
+        let codigo = token.token ?? ""
+        let vigencia = token.fecha_expiracion_formato ?? "24 horas"
+        let nombre = token.nombre ?? ""
+        let enlace = "https://wa.me/\(botNumero)?text=\(codigo)"
+        let cierre = "🔑 Código: \(codigo)\n🕒 Válido hasta: \(vigencia)\n\n💬 Toca el siguiente enlace para enviar tu código al asistente RESDE Guard y abrir automáticamente:\n\(enlace)"
+
+        if let descripcion = descripcionLimpia {
+            return "¡Hola! Te comparto la invitación para \(nombre) en \(residencial):\n\n💬 \"\(descripcion)\"\n\n\(cierre)"
+        }
+        return "¡Hola \(nombre)! Te comparto tu código de acceso para entrar a \(residencial):\n\n\(cierre)"
     }
 
     private var fechaFormateada: String {
-        token.fecha_expiracion_formato ?? token.fecha_expiracion ?? "-"
+        token.fecha_expiracion_formato ?? "24 horas"
     }
 
     private var numeroFormateado: String {
@@ -749,14 +813,16 @@ struct TokenGeneradoSheet: View {
                     .font(.system(size: 28, weight: .bold, design: .monospaced))
                     .foregroundColor(.blue)
 
-                if let nombre = token.nombre {
-                    Text("Visitante: \(nombre)")
+                if token.nombre != nil {
+                    Text(etiquetaNombre)
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                Text("Válido hasta: \(fechaFormateada)")
+                Text(etiquetaVigencia)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
 
                 Divider()
                     .padding(.vertical, 4)
