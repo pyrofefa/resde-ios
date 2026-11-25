@@ -130,6 +130,7 @@ struct PagosView: View {
         }
         .sheet(item: $selectedPago) { pago in
             ComprobantePagoSheet(pago: pago)
+                .environmentObject(authService)
                 .presentationDetents([.fraction(0.8)])
                 .presentationDragIndicator(.visible)
         }
@@ -338,9 +339,24 @@ struct YearPickerOverlay: View {
     }
 }
 
+/// Formato de moneda: `$12,450.00` (símbolo, miles y dos decimales).
+private func monedaComprobante(_ valor: Double) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    formatter.minimumFractionDigits = 2
+    formatter.maximumFractionDigits = 2
+    formatter.usesGroupingSeparator = true
+    formatter.locale = Locale(identifier: "en_US")
+    return "$" + (formatter.string(from: NSNumber(value: valor)) ?? String(format: "%.2f", valor))
+}
+
 struct ComprobantePagoSheet: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var authService: AuthService
     let pago: Pago
+
+    @State private var pdfURL: URL?
+    @State private var errorPDF = false
 
     private var total: Double {
         pago.montoValor - pago.descuentoValor
@@ -362,139 +378,212 @@ struct ComprobantePagoSheet: View {
             .padding(16)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack(alignment: .top, spacing: 16) {
-                            Image("logoApp")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 56, height: 56)
-                                .cornerRadius(12)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Comprobante de pago")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.blue)
-                                Text(pago.folio_pago ?? "N/A")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.red)
-                                Text("Fecha de pago: \(pago.fecha ?? "N/A")")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                        }
-
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Pagado por:")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                Text(pago.user_realiza_pago?.nombre_completo ?? "N/A")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.primary)
-                                if let direccion = pago.ubicacion?.direccion {
-                                    Text(direccion)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                }
-                                if let email = pago.user_realiza_pago?.email {
-                                    Text(email)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Validado por:")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                Text(pago.user_recibe_pago?.nombre_completo ?? "N/A")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.primary)
-                                if let email = pago.user_recibe_pago?.email {
-                                    Text(email)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-
-                        Divider()
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Método de pago:")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Text(pago.metodo_pago?.descripcion ?? "N/A")
-                                .font(.system(size: 15))
-                                .foregroundColor(.secondary)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Referencia:")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Text(pago.referencia_pago ?? pago.referencia_banco ?? "N/A")
-                                .font(.system(size: 15))
-                                .foregroundColor(.secondary)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Descripción:")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Text((pago.descripcion?.isEmpty == false ? pago.descripcion! : "—"))
-                                .font(.system(size: 15))
-                                .foregroundColor(.secondary)
-                        }
-
-                        VStack(spacing: 0) {
-                            HStack {
-                                Text("DESCRIPCIÓN")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text("AÑO")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text("MONTO")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(12)
-                            .background(Color(red: 0.05, green: 0.2, blue: 0.35))
-
-                            HStack {
-                                Text(pago.concepto?.descripcion ?? "N/A")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(pago.ano.map { String($0) } ?? "N/A")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text("$\(String(format: "%.2f", pago.montoValor))")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .font(.system(size: 14))
-                            .foregroundColor(.primary)
-                            .padding(12)
-                            .background(Color.gray.opacity(0.15))
-                        }
-                        .cornerRadius(8)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.2), lineWidth: 1))
-
-                        Text("Total: $\(String(format: "%.2f", total)) MXN")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.blue)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
+                ComprobanteTicket(pago: pago, total: total, logo: authService.user?.logo)
                     .padding(16)
-                    .background(Color.cardBackground)
-                    .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
-                }
-                .padding(16)
             }
+
+            botonCompartir
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .padding(.top, 8)
         }
         .background(Color.appBackground)
+        .task { pdfURL = generarPDF() }
+        .alert("No se pudo generar el comprobante", isPresented: $errorPDF) {
+            Button("Entendido", role: .cancel) {}
+        } message: {
+            Text("Inténtalo de nuevo en unos segundos.")
+        }
+    }
+
+    @ViewBuilder
+    private var botonCompartir: some View {
+        if let pdfURL {
+            ShareLink(
+                item: pdfURL,
+                preview: SharePreview("Comprobante \(pago.folio_pago ?? "")")
+            ) {
+                etiquetaBoton
+            }
+        } else {
+            Button(action: {
+                pdfURL = generarPDF()
+                if pdfURL == nil { errorPDF = true }
+            }) {
+                etiquetaBoton
+            }
+        }
+    }
+
+    private var etiquetaBoton: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "square.and.arrow.up")
+            Text("Compartir Comprobante")
+        }
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .padding(14)
+        .background(Color(red: 0.0, green: 0.4, blue: 0.7))
+        .cornerRadius(25)
+    }
+
+    /// Renderiza el ticket como PDF vectorial de una página (siempre en claro) y devuelve su URL.
+    @MainActor
+    private func generarPDF() -> URL? {
+        let hoja = ComprobanteTicket(pago: pago, total: total, logo: authService.user?.logo, exportando: true)
+            .padding(36)
+            .frame(width: 612)
+            .background(Color.white)
+            .environment(\.colorScheme, .light)
+
+        let renderer = ImageRenderer(content: hoja)
+        renderer.proposedSize = ProposedViewSize(width: 612, height: nil)
+
+        let carpeta = FileManager.default.temporaryDirectory.appendingPathComponent("comprobantes", isDirectory: true)
+        try? FileManager.default.createDirectory(at: carpeta, withIntermediateDirectories: true)
+
+        let folio = (pago.folio_pago ?? "pago")
+        let seguro = folio.map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? String($0) : "_" }.joined()
+        let destino = carpeta.appendingPathComponent("comprobante_\(seguro).pdf")
+        try? FileManager.default.removeItem(at: destino)
+
+        var exito = false
+        renderer.render { tamano, dibujar in
+            guard tamano.width > 0, tamano.height > 0 else { return }
+            var caja = CGRect(origin: .zero, size: tamano)
+            guard let consumidor = CGDataConsumer(url: destino as CFURL),
+                  let contexto = CGContext(consumer: consumidor, mediaBox: &caja, nil) else { return }
+            contexto.beginPDFPage(nil)
+            dibujar(contexto)
+            contexto.endPDFPage()
+            contexto.closePDF()
+            exito = true
+        }
+        return exito ? destino : nil
+    }
+}
+
+/// Ticket del comprobante. Se usa en pantalla y como contenido del PDF (`exportando`).
+private struct ComprobanteTicket: View {
+    let pago: Pago
+    let total: Double
+    let logo: String?
+    var exportando = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
+                ResidencialLogo(base64: logo, size: 56)
+                    .cornerRadius(12)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Comprobante de pago")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.blue)
+                    Text(pago.folio_pago ?? "N/A")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.red)
+                    Text("Fecha de pago: \(pago.fecha ?? "N/A")")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Pagado por:")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text(pago.user_realiza_pago?.nombre_completo ?? "N/A")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.primary)
+                    if let direccion = pago.ubicacion?.direccion {
+                        Text(direccion)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    if let email = pago.user_realiza_pago?.email {
+                        Text(email)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Validado por:")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text(pago.user_recibe_pago?.nombre_completo ?? "N/A")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.primary)
+                    if let email = pago.user_recibe_pago?.email {
+                        Text(email)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Divider()
+
+            campo("Método de pago:", pago.metodo_pago?.descripcion ?? "N/A")
+            campo("Referencia:", pago.referencia_pago ?? pago.referencia_banco ?? "N/A")
+            campo("Descripción:", (pago.descripcion?.isEmpty == false ? pago.descripcion! : "—"))
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("DESCRIPCIÓN")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("AÑO")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("MONTO")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.white)
+                .padding(12)
+                .background(Color(red: 0.05, green: 0.2, blue: 0.35))
+
+                HStack {
+                    Text(pago.concepto?.descripcion ?? "N/A")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(pago.ano.map { String($0) } ?? "N/A")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(monedaComprobante(pago.montoValor))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .font(.system(size: 14))
+                .foregroundColor(.primary)
+                .padding(12)
+                .background(Color.gray.opacity(0.15))
+            }
+            .cornerRadius(8)
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+
+            Text("Total: \(monedaComprobante(total)) MXN")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.blue)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(16)
+        .background(exportando ? Color.white : Color.cardBackground)
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+    }
+
+    private func campo(_ titulo: String, _ valor: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(titulo)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+            Text(valor)
+                .font(.system(size: 15))
+                .foregroundColor(.secondary)
+        }
     }
 }
 
