@@ -842,7 +842,8 @@ struct ModulesSection: View {
                 modules: [
                     ("pago.manage", "Pagos", "creditcard.fill"),
                     ("pago.manage", "Mensualidades", "calendar"),
-                    ("reporte.view", "Reportes", "chart.bar.fill")
+                    ("reporte.view", "Reportes", "chart.bar.fill"),
+                    ("reporte.mapa", "Mapa Residencial", "map.fill")
                 ]
             )
 
@@ -895,6 +896,8 @@ struct ModulesSection: View {
             MensualidadesView()
         case "Reportes":
             ReportesView()
+        case "Mapa Residencial":
+            MapaResidencialView()
         case "Censo":
             CensoView()
         case "Cuentas Vinculadas":
