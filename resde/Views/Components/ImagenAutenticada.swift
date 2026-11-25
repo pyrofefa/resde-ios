@@ -38,7 +38,8 @@ struct ImagenAutenticada<Placeholder: View>: View {
         }
 
         var request = URLRequest(url: url)
-        if let token = authService.token {
+        // El token solo viaja a nuestro propio dominio.
+        if let host = url.host, host.hasSuffix("aseenti.com.mx"), let token = authService.token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         guard let (data, response) = try? await URLSession.shared.data(for: request),

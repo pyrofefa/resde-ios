@@ -854,6 +854,7 @@ struct ModulesSection: View {
                     ("censo.manage", "Censo", "person.2.fill"),
                     ("cuentasv.manage", "Cuentas Vinculadas", "building.2.fill"),
                     ("mascotas.manage", "Mascotas", "pawprint.fill"),
+                    (nil, "Identificar Mascota", "qrcode.viewfinder"),
                     ("vehiculos.manage", "Vehículos", "car.fill")
                 ]
             )
@@ -900,6 +901,8 @@ struct ModulesSection: View {
             CuentasView()
         case "Mascotas":
             MascotasView()
+        case "Identificar Mascota":
+            EscanearMascotaView()
         case "Vehículos":
             VehiculosView()
         case "Eventos":
