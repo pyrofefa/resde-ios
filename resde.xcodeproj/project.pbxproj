@@ -403,8 +403,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Resde necesita acceso a la cámara para adjuntar fotos de evidencia en tus quejas y reportes.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Resde necesita acceso a tus fotos para adjuntar evidencia en tus quejas y reportes.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Resde necesita acceso a la cámara para tomar fotos de evidencia en tus quejas y de tus mascotas.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Resde necesita acceso a tus fotos para adjuntar evidencia en tus quejas y fotos de tus mascotas.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -456,8 +456,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Resde necesita acceso a la cámara para adjuntar fotos de evidencia en tus quejas y reportes.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Resde necesita acceso a tus fotos para adjuntar evidencia en tus quejas y reportes.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Resde necesita acceso a la cámara para tomar fotos de evidencia en tus quejas y de tus mascotas.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Resde necesita acceso a tus fotos para adjuntar evidencia en tus quejas y fotos de tus mascotas.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
