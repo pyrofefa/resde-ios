@@ -118,7 +118,7 @@ class EscanearMascotaViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             let decoded = try? JSONDecoder().decode(MascotaQrRespuesta.self, from: data)
 

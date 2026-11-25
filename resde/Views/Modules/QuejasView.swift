@@ -168,7 +168,7 @@ struct QuejasView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Status code: \(httpResponse.statusCode)")
             }
@@ -488,7 +488,7 @@ struct CreateQuejaSheet: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             return data
         } catch {
             print("❌ Error fetching tipos: \(error)")

@@ -44,4 +44,6 @@ struct AuthData: Codable {
 struct LoginRequest: Codable {
     let email: String
     let password: String
+    /// Nivel de acceso: 2 = residente (igual que Android).
+    var nivel: Int = 2
 }

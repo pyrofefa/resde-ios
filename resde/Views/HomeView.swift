@@ -49,19 +49,6 @@ struct HomeView: View {
                     )
                 }
 
-                if showPermisosActualizados {
-                    PermisosActualizadosOverlay(
-                        onEntendido: {
-                            showPermisosActualizados = false
-                            if let ubicacionId = authService.ubicacionActualKey {
-                                Task {
-                                    await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
-                                }
-                            }
-                        }
-                    )
-                }
-
                 if showAperturaToast {
                     VStack {
                         Spacer()
@@ -120,6 +107,16 @@ struct HomeView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .permisosActualizados)) { _ in
                 showPermisosActualizados = true
+            }
+            .sheet(isPresented: $showPermisosActualizados, onDismiss: {
+                if let ubicacionId = authService.ubicacionActualKey {
+                    Task { await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId) }
+                }
+            }) {
+                PermisosActualizadosSheet(onEntendido: { showPermisosActualizados = false })
+                    .presentationDetents([.fraction(0.35)])
+                    .presentationDragIndicator(.hidden)
+                    .interactiveDismissDisabled()
             }
             .sheet(isPresented: $showAperturaYTokens) {
                 AperturaYTokensSheet(
@@ -302,42 +299,47 @@ struct ConfirmarLogoutOverlay: View {
     }
 }
 
-struct PermisosActualizadosOverlay: View {
+struct PermisosActualizadosSheet: View {
     let onEntendido: () -> Void
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
+        VStack(spacing: 16) {
+            Capsule()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 40, height: 5)
+                .padding(.top, 8)
 
-            VStack(alignment: .leading, spacing: 16) {
-                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundColor(.blue)
+            Spacer(minLength: 0)
 
-                Text("Permisos actualizados")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.primary)
+            Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                .font(.system(size: 40))
+                .foregroundColor(.blue)
 
-                Text("Se han actualizado tus permisos y accesos en el sistema. Refrescando inicio...")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+            Text("Actualización de Permisos")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.primary)
 
-                HStack {
-                    Spacer()
-                    Button(action: onEntendido) {
-                        Text("Entendido")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.blue)
-                    }
-                }
+            Text("Se han actualizado tus permisos y accesos en el sistema. Refrescando inicio...")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            Button(action: onEntendido) {
+                Text("Entendido")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color(red: 0.0, green: 0.4, blue: 0.7))
+                    .cornerRadius(25)
             }
-            .padding(20)
-            .background(Color.cardBackground)
-            .cornerRadius(12)
-            .frame(maxWidth: 320)
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 24)
+
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity)
+        .background(Color.appBackground)
     }
 }
 

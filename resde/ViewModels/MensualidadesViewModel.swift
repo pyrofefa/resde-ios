@@ -128,7 +128,7 @@ class MensualidadesViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 \(endpoint) Status: \(httpResponse.statusCode)")
             }
@@ -179,7 +179,7 @@ class MensualidadesDetailViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Mensualidades Status: \(httpResponse.statusCode)")
             }

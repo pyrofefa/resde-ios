@@ -146,22 +146,12 @@ class AuthService: ObservableObject {
                     UserDefaults.standard.set(try? JSONEncoder().encode(authResponse.data), forKey: "currentUser")
                 }
 
-            case 401:
-                await MainActor.run {
-                    self.errorMessage = "Email o contraseña incorrectos"
-                    self.isLoading = false
-                }
-
-            case 400:
-                let errorMessage = parseErrorResponse(data)
-                await MainActor.run {
-                    self.errorMessage = errorMessage
-                    self.isLoading = false
-                }
-
             default:
+                // `msj` o `message` del servidor; sin texto: "Credenciales incorrectas." (o error de servidor en 5xx).
+                let mensaje = mensajeDelServidor(data)
+                    ?? (httpResponse.statusCode >= 500 ? "Error del servidor. Intenta más tarde." : "Credenciales incorrectas.")
                 await MainActor.run {
-                    self.errorMessage = "Error del servidor. Intenta más tarde."
+                    self.errorMessage = mensaje
                     self.isLoading = false
                 }
             }
@@ -286,7 +276,7 @@ class AuthService: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Status code: \(httpResponse.statusCode)")
             }
@@ -362,24 +352,6 @@ class AuthService: ObservableObject {
         components?.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
         return components?.url
     }
-
-    private func parseErrorResponse(_ data: Data) -> String {
-        if let errorResponse = try? JSONDecoder().decode(AuthResponse.self, from: data) {
-            return errorResponse.msj
-        }
-
-        if let errorDict = try? JSONDecoder().decode([String: String].self, from: data) {
-            return errorDict["msj"] ?? errorDict["message"] ?? "Datos inválidos"
-        }
-
-        if let errorString = try? JSONDecoder().decode([String: AnyCodable].self, from: data) {
-            if let message = errorString["msj"]?.value as? String {
-                return message
-            }
-        }
-
-        return "Datos inválidos"
-    }
 }
 
 extension Notification.Name {
@@ -414,7 +386,7 @@ struct MeResponse: Codable {
 
 /// Revisa la respuesta de una llamada a la API; si es 401, notifica para que la sesión se cierre.
 /// Debe llamarse justo después de cada `URLSession.shared.data(for:)` que use el Bearer token.
-func checkTokenInvalido(_ response: URLResponse?) {
+func checkTokenInvalido(_ response: URLResponse?, data: Data? = nil) {
     guard let httpResponse = response as? HTTPURLResponse else { return }
 
     // Algunos endpoints responden 401/419 en JSON; otros, cuando el token es
@@ -425,10 +397,25 @@ func checkTokenInvalido(_ response: URLResponse?) {
 
     if statusInvalido || redirigioALogin {
         print("🔒 Token inválido/expirado (\(httpResponse.statusCode)\(redirigioALogin ? ", redirigido a /login" : "")) — cerrando sesión")
+        // Mensaje del servidor (`message` o `msj`); si no hay, el texto oficial de sesión expirada.
+        let mensaje = (statusInvalido ? mensajeDelServidor(data) : nil)
+            ?? "Su sesión ha expirado o fue iniciada en otro dispositivo."
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .tokenInvalido, object: nil)
+            NotificationCenter.default.post(name: .tokenInvalido, object: nil, userInfo: ["mensaje": mensaje])
         }
     }
+}
+
+/// Extrae `msj` o `message` de un cuerpo JSON de error (nil si no hay texto útil).
+func mensajeDelServidor(_ data: Data?) -> String? {
+    guard let data,
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    for clave in ["message", "msj"] {
+        if let texto = (json[clave] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !texto.isEmpty {
+            return texto
+        }
+    }
+    return nil
 }
 
 private enum AnyCodable: Codable {

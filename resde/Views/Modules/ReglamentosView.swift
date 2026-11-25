@@ -102,7 +102,7 @@ struct ReglamentosView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             guard statusCode == 200 else {
@@ -253,7 +253,7 @@ private struct ReglamentoCard: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             guard statusCode == 200 else {

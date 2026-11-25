@@ -286,7 +286,7 @@ struct EventosView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             return data
         } catch {
             print("❌ Error fetching áreas: \(error)")
@@ -306,7 +306,7 @@ struct EventosView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             return data
         } catch {
             print("❌ Error fetching reservas: \(error)")
@@ -885,7 +885,7 @@ struct CreateEventoSheet: View {
             request.httpBody = jsonData
 
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             if statusCode >= 200 && statusCode < 300 {

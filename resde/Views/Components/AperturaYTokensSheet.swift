@@ -326,7 +326,7 @@ private struct AbrirPlumaTabView: View {
             request.httpBody = try JSONSerialization.data(withJSONObject: params)
 
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             let decodificada = try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data)
             let mensaje = decodificada?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -605,7 +605,7 @@ private struct GenerarCodigoTabView: View {
             request.httpBody = try JSONSerialization.data(withJSONObject: params)
 
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             if statusCode == 200 || statusCode == 201 {

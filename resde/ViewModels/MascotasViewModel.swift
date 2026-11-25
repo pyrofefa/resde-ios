@@ -112,7 +112,7 @@ class MascotasViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: solicitud(url))
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let decoded = try? JSONDecoder().decode(MascotasListaResponse.self, from: data)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
 
@@ -135,7 +135,7 @@ class MascotasViewModel: ObservableObject {
         guard especies.isEmpty, let url = URL(string: baseURL + "mascotas/especies") else { return }
         do {
             let (data, response) = try await URLSession.shared.data(for: solicitud(url))
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let decoded = try? JSONDecoder().decode(EspeciesResponse.self, from: data)
             if decoded?.success == false {
                 errorMessage = decoded?.message ?? "No se pudieron cargar las especies"
@@ -161,7 +161,7 @@ class MascotasViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let resultado = interpretar(data: data, response: response, porDefecto: "Error al dar de baja mascota")
             if resultado.exito {
                 mascotas.removeAll { $0.uuid == mascota.uuid }
@@ -228,7 +228,7 @@ class MascotasViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let resultado = interpretar(
                 data: data,
                 response: response,

@@ -154,7 +154,7 @@ struct QuejaDetalleSheet: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let image = UIImage(data: data) {
                 imagen = image
             } else {

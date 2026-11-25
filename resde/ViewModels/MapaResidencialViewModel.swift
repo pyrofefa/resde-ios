@@ -188,7 +188,7 @@ class MapaResidencialViewModel: ObservableObject {
 
         do {
             let (datos, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: datos)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             let decoded = try? JSONDecoder().decode(MapaResponse.self, from: datos)
 

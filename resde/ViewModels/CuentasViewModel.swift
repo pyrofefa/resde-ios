@@ -46,7 +46,7 @@ class CuentasViewModel: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NSError(domain: "API", code: -1)
@@ -170,7 +170,7 @@ extension CuentasViewModel {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             print("👥 \(method) \(path) Status: \(status)")
             return (data, status)

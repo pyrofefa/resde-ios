@@ -175,7 +175,7 @@ struct TarjetasView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             print("💳 tarjetas/deactivate Status: \(status)")
 
@@ -214,7 +214,7 @@ struct TarjetasView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Status code: \(httpResponse.statusCode)")
             }

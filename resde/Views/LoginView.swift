@@ -113,8 +113,8 @@ struct LoginView: View {
             .foregroundColor(.white)
             .background(Color.blue)
             .cornerRadius(12)
-            .disabled(authService.isLoading || email.isEmpty || password.isEmpty)
-            .opacity(authService.isLoading || email.isEmpty || password.isEmpty ? 0.6 : 1.0)
+            .disabled(authService.isLoading)
+            .opacity(authService.isLoading ? 0.6 : 1.0)
             .padding(.horizontal, 24)
             .padding(.top, 40)
 
@@ -143,7 +143,21 @@ struct LoginView: View {
 
     private func handleLogin() {
         Task {
-            await authService.login(email: email, password: password)
+            // Validaciones en el orden de Android: conexión, correo, contraseña.
+            guard await Conectividad.hayInternet() else {
+                errorAlert = ErrorPeticionMensaje(mensaje: "No cuentas con conexión a internet en este momento.")
+                return
+            }
+            let correo = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !correo.isEmpty else {
+                errorAlert = ErrorPeticionMensaje(mensaje: "Por favor ingresa un correo electrónico válido.")
+                return
+            }
+            guard !password.isEmpty else {
+                errorAlert = ErrorPeticionMensaje(mensaje: "Por favor ingresa tu contraseña.")
+                return
+            }
+            await authService.login(email: correo, password: password)
         }
     }
 }
