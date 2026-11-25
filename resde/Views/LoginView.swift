@@ -113,8 +113,8 @@ struct LoginView: View {
             .foregroundColor(.white)
             .background(Color.blue)
             .cornerRadius(12)
-            .disabled(authService.isLoading)
-            .opacity(authService.isLoading ? 0.6 : 1.0)
+            .disabled(authService.isLoading || email.isEmpty || password.isEmpty)
+            .opacity(authService.isLoading || email.isEmpty || password.isEmpty ? 0.6 : 1.0)
             .padding(.horizontal, 24)
             .padding(.top, 40)
 

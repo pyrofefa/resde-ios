@@ -51,12 +51,9 @@ struct SeccionCargando: View {
 
     var body: some View {
         ZStack {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .scaleEffect(2.2)
-                .tint(.blue)
+            AnilloCargando(size: 72, grosor: 5)
 
-            ResidencialLogo(base64: logo, size: 36)
+            ResidencialLogo(base64: logo, size: 44)
         }
         .frame(maxWidth: .infinity)
         .frame(height: height)
