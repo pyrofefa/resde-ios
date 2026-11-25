@@ -96,7 +96,7 @@ final class PushNotificationManager: NSObject, UNUserNotificationCenterDelegate 
         }
     }
 
-    private static func modeloDispositivo() -> String {
+    static func modeloDispositivo() -> String {
         var info = utsname()
         uname(&info)
         let identificador = withUnsafePointer(to: &info.machine) {

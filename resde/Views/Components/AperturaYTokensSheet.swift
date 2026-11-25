@@ -163,6 +163,10 @@ private struct AbrirPlumaTabView: View {
 
     @State private var estado: EstadoAperturaBoton = .normal
     @State private var isPressing = false
+    @State private var pulsoToque = false
+    @State private var pulsoContinuo = false
+    @State private var rebote = false
+    @State private var aviso: String?
 
     private var colorBoton: Color {
         estado == .exito ? Color.statusSuccess : Color(red: 0.0, green: 0.4, blue: 0.7)
@@ -174,6 +178,12 @@ private struct AbrirPlumaTabView: View {
         case .cargando: return "ABRIENDO"
         case .exito: return "¡ABIERTO!"
         }
+    }
+
+    private var escala: CGFloat {
+        if estado == .cargando { return pulsoContinuo ? 1.1 : 1.0 }
+        if rebote { return 1.15 }
+        return (isPressing || pulsoToque) ? 1.08 : 1.0
     }
 
     var body: some View {
@@ -192,8 +202,10 @@ private struct AbrirPlumaTabView: View {
                 Circle()
                     .fill(colorBoton)
                     .frame(width: 180, height: 180)
-                    .scaleEffect(isPressing ? 1.08 : 1.0)
+                    .scaleEffect(escala)
                     .animation(.easeOut(duration: 0.2), value: isPressing)
+                    .animation(.easeOut(duration: 0.2), value: pulsoToque)
+                    .animation(.easeOut(duration: 0.2), value: rebote)
 
                 VStack(spacing: 8) {
                     if estado == .cargando {
@@ -209,6 +221,9 @@ private struct AbrirPlumaTabView: View {
                         .foregroundColor(.white)
                 }
             }
+            .opacity(estado == .cargando ? 0.7 : 1.0)
+            .allowsHitTesting(estado == .normal)
+            .onTapGesture { mostrarAyudaToque() }
             .onLongPressGesture(
                 minimumDuration: 0.8,
                 pressing: { pressing in
@@ -221,19 +236,75 @@ private struct AbrirPlumaTabView: View {
                     Task { await solicitarApertura() }
                 }
             )
+
+            Text(aviso ?? " ")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(8)
+                .opacity(aviso == nil ? 0 : 1)
+                .animation(.easeInOut(duration: 0.2), value: aviso)
         }
         .padding(.vertical, 32)
     }
 
+    // MARK: - Interacciones
+
+    /// Toque simple: aviso y pulso breve (escala 1.08).
+    private func mostrarAyudaToque() {
+        guard estado == .normal else { return }
+        aviso = "Mantén presionado el círculo unos segundos para abrir"
+        pulsoToque = true
+        Task {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            pulsoToque = false
+            try? await Task.sleep(nanoseconds: 2_300_000_000)
+            aviso = nil
+        }
+    }
+
+    private func iniciarPulsoContinuo() {
+        pulsoContinuo = false
+        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+            pulsoContinuo = true
+        }
+    }
+
+    private func detenerPulsoContinuo() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            pulsoContinuo = false
+        }
+    }
+
+    private func animarRebote() {
+        rebote = true
+        Task {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            rebote = false
+        }
+    }
+
+    // MARK: - Apertura
+
     private func solicitarApertura() async {
         guard let ubicacionId = ubicacionId else {
-            onResultado(false, "No se pudo determinar la ubicación")
+            onResultado(false, "Selecciona una ubicación válida")
             return
         }
 
+        guard await Conectividad.hayInternet() else {
+            onResultado(false, "No cuentas con conexión a internet en este momento.")
+            return
+        }
+
+        aviso = nil
         estado = .cargando
+        iniciarPulsoContinuo()
 
         guard let url = URL(string: "https://resde.aseenti.com.mx/api/v1/pluma/abrir") else {
+            detenerPulsoContinuo()
             estado = .normal
             onResultado(false, "URL inválida")
             return
@@ -247,7 +318,8 @@ private struct AbrirPlumaTabView: View {
 
         let params: [String: Any] = [
             "ubicacion_id": ubicacionId,
-            "dispositivo": UIDevice.current.name
+            "dispositivo": PushNotificationManager.modeloDispositivo(),
+            "ip": Conectividad.direccionIPLocal()
         ]
 
         do {
@@ -256,23 +328,30 @@ private struct AbrirPlumaTabView: View {
             let (data, response) = try await URLSession.shared.data(for: request)
             checkTokenInvalido(response)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let decodificada = try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data)
+            let mensaje = decodificada?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-            if statusCode >= 200 && statusCode < 300 {
-                let mensaje = (try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data))?.message
-                    ?? "Solicitud de apertura iniciada"
+            // Éxito: HTTP 2xx y, si el servidor manda `status`, que sea "success" u "ok" (como Android).
+            let estadoServidor = decodificada?.status?.lowercased()
+            let exitoso = (200..<300).contains(statusCode)
+                && (estadoServidor == nil || estadoServidor == "success" || estadoServidor == "ok")
+
+            detenerPulsoContinuo()
+
+            if exitoso {
                 estado = .exito
-                try? await Task.sleep(nanoseconds: 900_000_000)
-                onResultado(true, mensaje)
+                animarRebote()
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                onResultado(true, mensaje.isEmpty ? "¡Pluma abierta exitosamente!" : mensaje)
             } else {
-                let mensaje = (try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data))?.message
-                    ?? "No se pudo iniciar la apertura"
                 estado = .normal
-                onResultado(false, mensaje)
+                onResultado(false, mensaje.isEmpty ? "No fue posible abrir la pluma. Inténtalo de nuevo." : mensaje)
             }
         } catch {
             print("❌ Error al solicitar apertura de pluma: \(error)")
+            detenerPulsoContinuo()
             estado = .normal
-            onResultado(false, "No se pudo iniciar la apertura")
+            onResultado(false, "Error de conexión o servidor al intentar abrir la pluma.")
         }
     }
 }
