@@ -22,6 +22,10 @@ class ReportesViewModel: ObservableObject {
     @Published var tablaIngresos: [MovimientoDetalle] = []
     @Published var tablaEgresos: [MovimientoDetalle] = []
     @Published var isLoadingDetalle = false
+    /// Mensaje oficial cuando el servidor responde `REPORTE_NO_PUBLICADO` para el mes elegido.
+    @Published var mensajeNoPublicado: String?
+
+    static let mensajeNoPublicadoPorDefecto = "Este mes aún no ha sido publicado."
 
     private let authService = AuthService(mockData: false)
 
@@ -38,6 +42,7 @@ class ReportesViewModel: ObservableObject {
     func loadReportes() async {
         isLoading = true
         showError = false
+        mensajeNoPublicado = nil
 
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -58,6 +63,17 @@ class ReportesViewModel: ObservableObject {
         barrasEgresos = []
         tendenciaIngresos = []
         tendenciaEgresos = []
+        tablaIngresos = []
+        tablaEgresos = []
+
+        // Reporte no publicado: limpia todo y muestra el mensaje oficial, sin error genérico.
+        for respuesta in [balanceData, graficaData, barrasData, tendenciaData] {
+            if let mensaje = Self.mensajeSiNoPublicado(respuesta) {
+                mensajeNoPublicado = mensaje
+                isLoading = false
+                return
+            }
+        }
 
         if let balanceData = balanceData {
             do {
@@ -114,6 +130,13 @@ class ReportesViewModel: ObservableObject {
         let fechaParam = dateFormatter.string(from: selectedDate)
 
         if let data = await fetchReporte(endpoint: "totales-ingresos-egresos", fecha: fechaParam) {
+            if let mensaje = Self.mensajeSiNoPublicado(data) {
+                mensajeNoPublicado = mensaje
+                tablaIngresos = []
+                tablaEgresos = []
+                isLoadingDetalle = false
+                return
+            }
             do {
                 let response = try JSONDecoder().decode(TotalesIngresosEgresosResponse.self, from: data)
                 tablaIngresos = response.data?.tabla_ingresos ?? []
@@ -131,6 +154,20 @@ class ReportesViewModel: ObservableObject {
         isLoadingDetalle = false
     }
 
+    private struct ReporteCodigoRespuesta: Decodable {
+        let code: String?
+        let message: String?
+    }
+
+    /// Devuelve el mensaje del servidor si la respuesta trae `code == "REPORTE_NO_PUBLICADO"`.
+    private static func mensajeSiNoPublicado(_ data: Data?) -> String? {
+        guard let data,
+              let respuesta = try? JSONDecoder().decode(ReporteCodigoRespuesta.self, from: data),
+              respuesta.code == "REPORTE_NO_PUBLICADO" else { return nil }
+        let mensaje = respuesta.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return mensaje.isEmpty ? mensajeNoPublicadoPorDefecto : mensaje
+    }
+
     private func fetchReporte(endpoint: String, fecha: String) async -> Data? {
         guard let url = URL(string: "https://resde.aseenti.com.mx/api/v1/reportes/\(endpoint)?fecha=\(fecha)") else {
             return nil
@@ -143,7 +180,7 @@ class ReportesViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 403 {
                 return nil
             }

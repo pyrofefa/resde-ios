@@ -7,16 +7,18 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var authService: AuthService
-    @State private var selectedUbicacion: String = ""
+    @State private var cargaInicialHecha = false
+    @State private var actualizacion: ActualizacionDisponible?
     @State private var showUbicacionMenu = false
     @State private var showAperturaYTokens = false
     @State private var showAperturaToast = false
     @State private var aperturaToastMensaje = ""
     @State private var showConfirmarLogout = false
     @State private var showPermisosActualizados = false
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 Color.appBackground
                     .ignoresSafeArea()
@@ -28,14 +30,10 @@ struct HomeView: View {
                     )
 
                     ScrollView {
-                        HomeContent(
-                            selectedUbicacion: $selectedUbicacion,
-                            showUbicacionMenu: $showUbicacionMenu
-                        )
+                        HomeContent(showUbicacionMenu: $showUbicacionMenu)
                     }
                     .refreshable {
-                        if let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == selectedUbicacion })?.key
-                            ?? authService.user?.ubicaciones.first?.key {
+                        if let ubicacionId = authService.ubicacionActualKey {
                             await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                         }
                     }
@@ -47,20 +45,6 @@ struct HomeView: View {
                         onConfirm: {
                             showConfirmarLogout = false
                             authService.logout()
-                        }
-                    )
-                }
-
-                if showPermisosActualizados {
-                    PermisosActualizadosOverlay(
-                        onEntendido: {
-                            showPermisosActualizados = false
-                            if let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == selectedUbicacion })?.key
-                                ?? authService.user?.ubicaciones.first?.key {
-                                Task {
-                                    await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
-                                }
-                            }
                         }
                     )
                 }
@@ -82,29 +66,61 @@ struct HomeView: View {
                     .transition(.opacity)
                 }
             }
-            .onAppear {
-                if selectedUbicacion.isEmpty, let ubicaciones = authService.user?.ubicaciones {
-                    if let firstLocation = ubicaciones.sorted(by: { $0.key < $1.key }).first {
-                        selectedUbicacion = firstLocation.value
-                        Task {
-                            await authService.loadCarouselDataInParallel(ubicacionId: firstLocation.key)
-                        }
-                    }
-                }
+            .onReceive(NotificationCenter.default.publisher(for: .abrirHistorialAccesos)) { _ in
+                abrirHistorialDesdeNotificacion()
             }
-            .onChange(of: selectedUbicacion) { oldValue, newValue in
-                if !newValue.isEmpty, let ubicacionId = authService.user?.ubicaciones.first(where: { $0.value == newValue })?.key {
+            .onAppear {
+                if PushNotificationManager.shared.abrirHistorialPendiente {
+                    abrirHistorialDesdeNotificacion()
+                }
+                if !cargaInicialHecha, let ubicacionId = authService.ubicacionActualKey {
+                    cargaInicialHecha = true
                     Task {
                         await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
                     }
                 }
             }
+            .onChange(of: authService.ubicacionActualKey) { _, nueva in
+                if cargaInicialHecha, let ubicacionId = nueva {
+                    Task {
+                        await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId)
+                    }
+                }
+            }
+            .task {
+                if let disponible = await UpdateChecker.buscarActualizacion() {
+                    actualizacion = disponible
+                }
+            }
+            .alert(
+                "Nueva versión disponible",
+                isPresented: Binding(
+                    get: { actualizacion != nil },
+                    set: { if !$0 { actualizacion = nil } }
+                ),
+                presenting: actualizacion
+            ) { disponible in
+                Button("Actualizar") { UIApplication.shared.open(disponible.url) }
+                Button("Más tarde", role: .cancel) {}
+            } message: { disponible in
+                Text("Hay una versión nueva (\(disponible.version)). Actualiza para tener las últimas mejoras y correcciones.")
+            }
             .onReceive(NotificationCenter.default.publisher(for: .permisosActualizados)) { _ in
                 showPermisosActualizados = true
             }
+            .sheet(isPresented: $showPermisosActualizados, onDismiss: {
+                if let ubicacionId = authService.ubicacionActualKey {
+                    Task { await authService.loadCarouselDataInParallel(ubicacionId: ubicacionId) }
+                }
+            }) {
+                PermisosActualizadosSheet(onEntendido: { showPermisosActualizados = false })
+                    .presentationDetents([.fraction(0.35)])
+                    .presentationDragIndicator(.hidden)
+                    .interactiveDismissDisabled()
+            }
             .sheet(isPresented: $showAperturaYTokens) {
                 AperturaYTokensSheet(
-                    ubicacionId: Int(authService.user?.ubicaciones.first?.key ?? ""),
+                    ubicacionId: authService.ubicacionActualId,
                     onAperturaResultado: { mensaje in
                         mostrarAperturaToast(mensaje)
                     }
@@ -114,6 +130,13 @@ struct HomeView: View {
                 .presentationDragIndicator(.hidden)
             }
         }
+    }
+
+    private func abrirHistorialDesdeNotificacion() {
+        PushNotificationManager.shared.abrirHistorialPendiente = false
+        showAperturaYTokens = false
+        path = NavigationPath()
+        path.append("Historial de accesos")
     }
 
     private func mostrarAperturaToast(_ mensaje: String) {
@@ -133,7 +156,6 @@ struct HomeView: View {
 // MARK: - HomeContent
 struct HomeContent: View {
     @EnvironmentObject var authService: AuthService
-    @Binding var selectedUbicacion: String
     @Binding var showUbicacionMenu: Bool
 
     var body: some View {
@@ -142,25 +164,33 @@ struct HomeContent: View {
                 .padding(16)
 
             UbicacionCard(
-                selectedUbicacion: $selectedUbicacion,
+                selectedKey: Binding(
+                    get: { authService.ubicacionActualKey ?? "" },
+                    set: { authService.seleccionarUbicacion($0) }
+                ),
                 ubicaciones: authService.user?.ubicaciones ?? [:],
                 showMenu: $showUbicacionMenu
             )
             .padding(.horizontal, 16)
 
-            InfoCarousel()
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
+            if authService.puedeVerResumen {
+                InfoCarousel()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
 
-            ResumenSection()
-                .padding(.horizontal, 16)
-                .padding(.top, 15)
+                ResumenSection()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 15)
 
-            PanoramaSection()
-                .padding(.horizontal, 16)
-                .padding(.top, 15)
+                PanoramaSection()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 15)
+            }
 
-            ModulesSection(permissions: authService.user?.permissions ?? [])
+            ModulesSection(
+                permissions: authService.user?.permissions ?? [],
+                isSuperAdmin: authService.user?.is_super_admin ?? false
+            )
                 .padding(.horizontal, 16)
                 .padding(.top, 15)
                 .padding(.bottom, 24)
@@ -189,12 +219,14 @@ struct HomeToolbar: View {
             Spacer()
 
             HStack(spacing: 20) {
-                Button(action: {
-                    showAperturaYTokens = true
-                }) {
-                    Image(systemName: "key.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white)
+                if authService.puedeAbrirPluma || authService.puedeGenerarCodigo {
+                    Button(action: {
+                        showAperturaYTokens = true
+                    }) {
+                        Image(systemName: "key.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white)
+                    }
                 }
 
                 Button(action: {
@@ -267,42 +299,47 @@ struct ConfirmarLogoutOverlay: View {
     }
 }
 
-struct PermisosActualizadosOverlay: View {
+struct PermisosActualizadosSheet: View {
     let onEntendido: () -> Void
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
+        VStack(spacing: 16) {
+            Capsule()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 40, height: 5)
+                .padding(.top, 8)
 
-            VStack(alignment: .leading, spacing: 16) {
-                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundColor(.blue)
+            Spacer(minLength: 0)
 
-                Text("Permisos actualizados")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.primary)
+            Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                .font(.system(size: 40))
+                .foregroundColor(.blue)
 
-                Text("Se han actualizado tus permisos y accesos en el sistema. Refrescando inicio...")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+            Text("Actualización de Permisos")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.primary)
 
-                HStack {
-                    Spacer()
-                    Button(action: onEntendido) {
-                        Text("Entendido")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.blue)
-                    }
-                }
+            Text("Se han actualizado tus permisos y accesos en el sistema. Refrescando inicio...")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            Button(action: onEntendido) {
+                Text("Entendido")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color(red: 0.0, green: 0.4, blue: 0.7))
+                    .cornerRadius(25)
             }
-            .padding(20)
-            .background(Color.cardBackground)
-            .cornerRadius(12)
-            .frame(maxWidth: 320)
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 24)
+
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity)
+        .background(Color.appBackground)
     }
 }
 
@@ -324,10 +361,7 @@ struct HomeHeader: View {
                 }
 
                 Spacer()
-                Image("logoApp")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 50, height: 50)
+                ResidencialLogo(base64: user?.logo, size: 50)
             }
         }
     }
@@ -335,7 +369,7 @@ struct HomeHeader: View {
 
 // MARK: - UbicacionCard
 struct UbicacionCard: View {
-    @Binding var selectedUbicacion: String
+    @Binding var selectedKey: String
     let ubicaciones: [String: String]
     @Binding var showMenu: Bool
 
@@ -352,7 +386,7 @@ struct UbicacionCard: View {
                         .foregroundColor(.secondary)
                         .textCase(.uppercase)
 
-                    Text(selectedUbicacion)
+                    Text(ubicaciones[selectedKey] ?? "")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.primary)
                 }
@@ -374,7 +408,7 @@ struct UbicacionCard: View {
 
             if showMenu {
                 UbicacionMenuContent(
-                    selectedUbicacion: $selectedUbicacion,
+                    selectedKey: $selectedKey,
                     ubicaciones: ubicaciones,
                     showMenu: $showMenu
                 )
@@ -387,7 +421,7 @@ struct UbicacionCard: View {
 }
 
 struct UbicacionMenuContent: View {
-    @Binding var selectedUbicacion: String
+    @Binding var selectedKey: String
     let ubicaciones: [String: String]
     @Binding var showMenu: Bool
 
@@ -397,10 +431,11 @@ struct UbicacionMenuContent: View {
         VStack(alignment: .leading, spacing: 0) {
             let sortedUbicaciones = Array(ubicaciones.sorted(by: { $0.key < $1.key }))
             ForEach(sortedUbicaciones.indices, id: \.self) { index in
+                let key = sortedUbicaciones[index].key
                 let value = sortedUbicaciones[index].value
 
                 Button(action: {
-                    selectedUbicacion = value
+                    selectedKey = key
                     withAnimation {
                         showMenu = false
                     }
@@ -412,7 +447,7 @@ struct UbicacionMenuContent: View {
 
                         Spacer()
 
-                        if selectedUbicacion == value {
+                        if selectedKey == key {
                             Image(systemName: "checkmark")
                                 .foregroundColor(.blue)
                         }
@@ -526,6 +561,14 @@ struct InfoCarousel: View {
     }
 
     var body: some View {
+        if authService.cargandoDatosHome {
+            SeccionCargando(logo: authService.user?.logo, height: 200)
+        } else {
+            contenido
+        }
+    }
+
+    private var contenido: some View {
         VStack(spacing: 12) {
             GeometryReader { geometry in
                 HStack(spacing: 16) {
@@ -618,7 +661,11 @@ struct ResumenSection: View {
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
 
-            ResumenCards(estadoAdeudos: authService.carouselData.estadoAdeudos)
+            if authService.cargandoDatosHome {
+                SeccionCargando(logo: authService.user?.logo, height: 150)
+            } else {
+                ResumenCards(estadoAdeudos: authService.carouselData.estadoAdeudos)
+            }
         }
     }
 }
@@ -716,10 +763,14 @@ struct PanoramaSection: View {
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
 
-            PanoramaContent(
-                mesesDetalle: authService.carouselData.estadoAdeudos?.data?.mesesDetalle ?? [],
-                cuotaSub: authService.carouselData.estadoAdeudos?.data?.cuotaSub
-            )
+            if authService.cargandoDatosHome {
+                SeccionCargando(logo: authService.user?.logo, height: 120)
+            } else {
+                PanoramaContent(
+                    mesesDetalle: authService.carouselData.estadoAdeudos?.data?.mesesDetalle ?? [],
+                    cuotaSub: authService.carouselData.estadoAdeudos?.data?.cuotaSub
+                )
+            }
         }
     }
 }
@@ -777,6 +828,7 @@ struct PanoramaContent: View {
 struct ModulesSection: View {
     @EnvironmentObject var authService: AuthService
     let permissions: [String]
+    let isSuperAdmin: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -788,20 +840,24 @@ struct ModulesSection: View {
             ModuleSectionGroup(
                 title: "PAGOS Y FINANZAS",
                 permissions: permissions,
+                isSuperAdmin: isSuperAdmin,
                 modules: [
-                    ("pago.create", "Pagos", "creditcard.fill"),
-                    ("pago.create", "Mensualidades", "calendar"),
-                    ("reporte.view", "Reportes", "chart.bar.fill")
+                    ("pago.manage", "Pagos", "creditcard.fill"),
+                    ("pago.manage", "Mensualidades", "calendar"),
+                    ("reporte.view", "Reportes", "chart.bar.fill"),
+                    ("reporte.mapa", "Mapa Residencial", "map.fill")
                 ]
             )
 
             ModuleSectionGroup(
                 title: "MI HOGAR",
                 permissions: permissions,
+                isSuperAdmin: isSuperAdmin,
                 modules: [
                     ("censo.manage", "Censo", "person.2.fill"),
                     ("cuentasv.manage", "Cuentas Vinculadas", "building.2.fill"),
                     ("mascotas.manage", "Mascotas", "pawprint.fill"),
+                    (nil, "Identificar Mascota", "qrcode.viewfinder"),
                     ("vehiculos.manage", "Vehículos", "car.fill")
                 ]
             )
@@ -809,6 +865,7 @@ struct ModulesSection: View {
             ModuleSectionGroup(
                 title: "COMUNIDAD",
                 permissions: permissions,
+                isSuperAdmin: isSuperAdmin,
                 modules: [
                     ("evento.manage", "Eventos", "calendar"),
                     ("queja.manage", "Quejas", "exclamationmark.bubble.fill"),
@@ -819,10 +876,11 @@ struct ModulesSection: View {
             ModuleSectionGroup(
                 title: "ACCESOS",
                 permissions: permissions,
+                isSuperAdmin: isSuperAdmin,
                 modules: [
                     ("tarjetas.manage", "Tarjetas de acceso", "wifi.router.fill"),
-                    (nil, "Claves de acceso", "key.fill"),
-                    (nil, "Historial de accesos", "clock.arrow.circlepath")
+                    ("acceso.manage", "Claves de acceso", "key.fill"),
+                    ("acceso.history", "Historial de accesos", "clock.arrow.circlepath")
                 ]
             )
         }
@@ -840,12 +898,16 @@ struct ModulesSection: View {
             MensualidadesView()
         case "Reportes":
             ReportesView()
+        case "Mapa Residencial":
+            MapaResidencialView()
         case "Censo":
             CensoView()
         case "Cuentas Vinculadas":
             CuentasView()
         case "Mascotas":
             MascotasView()
+        case "Identificar Mascota":
+            EscanearMascotaView()
         case "Vehículos":
             VehiculosView()
         case "Eventos":
@@ -869,11 +931,13 @@ struct ModulesSection: View {
 struct ModuleSectionGroup: View {
     let title: String
     let permissions: [String]
+    let isSuperAdmin: Bool
     let modules: [(permission: String?, title: String, icon: String)]
 
     var visibleModules: [(String, String)] {
         modules.compactMap { module in
-            if module.permission == nil || permissions.contains(module.permission!) {
+            // Como en Android: el súper admin ve todos los módulos.
+            if isSuperAdmin || module.permission == nil || permissions.contains(module.permission!) {
                 return (module.title, module.icon)
             }
             return nil

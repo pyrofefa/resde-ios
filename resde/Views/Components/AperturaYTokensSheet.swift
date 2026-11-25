@@ -32,6 +32,27 @@ struct AperturaYTokensSheet: View {
         _tab = State(initialValue: soloGenerarCodigo ? .generarCodigo : .abrirPluma)
     }
 
+    private var puedeAbrir: Bool { authService.puedeAbrirPluma }
+    private var puedeGenerar: Bool { authService.puedeGenerarCodigo }
+
+    /// Pestañas solo si el usuario tiene ambos permisos (como Android).
+    private var mostrarPestanas: Bool { !soloGenerarCodigo && puedeAbrir && puedeGenerar }
+
+    /// Contenido efectivo según permisos.
+    private var tabEfectiva: AperturaTab {
+        if soloGenerarCodigo { return .generarCodigo }
+        if puedeAbrir && !puedeGenerar { return .abrirPluma }
+        if !puedeAbrir && puedeGenerar { return .generarCodigo }
+        return tab
+    }
+
+    private var mensajeSinPermiso: String? {
+        if soloGenerarCodigo {
+            return puedeGenerar ? nil : "No tienes permisos para generar códigos de acceso"
+        }
+        return (puedeAbrir || puedeGenerar) ? nil : "No tienes permisos para realizar estas acciones"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
@@ -40,7 +61,7 @@ struct AperturaYTokensSheet: View {
                 .padding(.top, 8)
                 .padding(.bottom, 12)
 
-            if !soloGenerarCodigo {
+            if mostrarPestanas {
                 HStack(spacing: 0) {
                     AperturaTabButton(title: "Abrir Pluma", isSelected: tab == .abrirPluma) {
                         tab = .abrirPluma
@@ -53,7 +74,9 @@ struct AperturaYTokensSheet: View {
                 Divider()
             }
 
-            if tab == .abrirPluma {
+            if mensajeSinPermiso != nil {
+                Color.clear.frame(height: 1)
+            } else if tabEfectiva == .abrirPluma {
                 AbrirPlumaTabView(
                     ubicacionId: ubicacionId,
                     authService: authService,
@@ -83,8 +106,14 @@ struct AperturaYTokensSheet: View {
             Spacer(minLength: 0)
         }
         .background(Color.appBackground)
+        .onAppear {
+            if let mensaje = mensajeSinPermiso {
+                onAperturaResultado(mensaje)
+                dismiss()
+            }
+        }
         .sheet(item: $tokenGenerado) { token in
-            TokenGeneradoSheet(token: token, onCerrar: {
+            TokenGeneradoSheet(token: token, residencialFallback: authService.user?.residencial, onCerrar: {
                 // Solo cerramos la sheet de afuera: al hacerlo, SwiftUI cierra junto
                 // con ella la de "código generado" en una sola animación, sin que se
                 // alcance a ver de regreso el formulario de "Generar Código".
@@ -134,6 +163,10 @@ private struct AbrirPlumaTabView: View {
 
     @State private var estado: EstadoAperturaBoton = .normal
     @State private var isPressing = false
+    @State private var pulsoToque = false
+    @State private var pulsoContinuo = false
+    @State private var rebote = false
+    @State private var aviso: String?
 
     private var colorBoton: Color {
         estado == .exito ? Color.statusSuccess : Color(red: 0.0, green: 0.4, blue: 0.7)
@@ -145,6 +178,12 @@ private struct AbrirPlumaTabView: View {
         case .cargando: return "ABRIENDO"
         case .exito: return "¡ABIERTO!"
         }
+    }
+
+    private var escala: CGFloat {
+        if estado == .cargando { return pulsoContinuo ? 1.1 : 1.0 }
+        if rebote { return 1.15 }
+        return (isPressing || pulsoToque) ? 1.08 : 1.0
     }
 
     var body: some View {
@@ -163,8 +202,10 @@ private struct AbrirPlumaTabView: View {
                 Circle()
                     .fill(colorBoton)
                     .frame(width: 180, height: 180)
-                    .scaleEffect(isPressing ? 1.08 : 1.0)
+                    .scaleEffect(escala)
                     .animation(.easeOut(duration: 0.2), value: isPressing)
+                    .animation(.easeOut(duration: 0.2), value: pulsoToque)
+                    .animation(.easeOut(duration: 0.2), value: rebote)
 
                 VStack(spacing: 8) {
                     if estado == .cargando {
@@ -180,6 +221,9 @@ private struct AbrirPlumaTabView: View {
                         .foregroundColor(.white)
                 }
             }
+            .opacity(estado == .cargando ? 0.7 : 1.0)
+            .allowsHitTesting(estado == .normal)
+            .onTapGesture { mostrarAyudaToque() }
             .onLongPressGesture(
                 minimumDuration: 0.8,
                 pressing: { pressing in
@@ -192,19 +236,75 @@ private struct AbrirPlumaTabView: View {
                     Task { await solicitarApertura() }
                 }
             )
+
+            Text(aviso ?? " ")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(8)
+                .opacity(aviso == nil ? 0 : 1)
+                .animation(.easeInOut(duration: 0.2), value: aviso)
         }
         .padding(.vertical, 32)
     }
 
+    // MARK: - Interacciones
+
+    /// Toque simple: aviso y pulso breve (escala 1.08).
+    private func mostrarAyudaToque() {
+        guard estado == .normal else { return }
+        aviso = "Mantén presionado el círculo unos segundos para abrir"
+        pulsoToque = true
+        Task {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            pulsoToque = false
+            try? await Task.sleep(nanoseconds: 2_300_000_000)
+            aviso = nil
+        }
+    }
+
+    private func iniciarPulsoContinuo() {
+        pulsoContinuo = false
+        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+            pulsoContinuo = true
+        }
+    }
+
+    private func detenerPulsoContinuo() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            pulsoContinuo = false
+        }
+    }
+
+    private func animarRebote() {
+        rebote = true
+        Task {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            rebote = false
+        }
+    }
+
+    // MARK: - Apertura
+
     private func solicitarApertura() async {
         guard let ubicacionId = ubicacionId else {
-            onResultado(false, "No se pudo determinar la ubicación")
+            onResultado(false, "Selecciona una ubicación válida")
             return
         }
 
+        guard await Conectividad.hayInternet() else {
+            onResultado(false, "No cuentas con conexión a internet en este momento.")
+            return
+        }
+
+        aviso = nil
         estado = .cargando
+        iniciarPulsoContinuo()
 
         guard let url = URL(string: "https://resde.aseenti.com.mx/api/v1/pluma/abrir") else {
+            detenerPulsoContinuo()
             estado = .normal
             onResultado(false, "URL inválida")
             return
@@ -218,32 +318,40 @@ private struct AbrirPlumaTabView: View {
 
         let params: [String: Any] = [
             "ubicacion_id": ubicacionId,
-            "dispositivo": UIDevice.current.name
+            "dispositivo": PushNotificationManager.modeloDispositivo(),
+            "ip": Conectividad.direccionIPLocal()
         ]
 
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: params)
 
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let decodificada = try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data)
+            let mensaje = decodificada?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-            if statusCode >= 200 && statusCode < 300 {
-                let mensaje = (try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data))?.message
-                    ?? "Solicitud de apertura iniciada"
+            // Éxito: HTTP 2xx y, si el servidor manda `status`, que sea "success" u "ok" (como Android).
+            let estadoServidor = decodificada?.status?.lowercased()
+            let exitoso = (200..<300).contains(statusCode)
+                && (estadoServidor == nil || estadoServidor == "success" || estadoServidor == "ok")
+
+            detenerPulsoContinuo()
+
+            if exitoso {
                 estado = .exito
-                try? await Task.sleep(nanoseconds: 900_000_000)
-                onResultado(true, mensaje)
+                animarRebote()
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                onResultado(true, mensaje.isEmpty ? "¡Pluma abierta exitosamente!" : mensaje)
             } else {
-                let mensaje = (try? JSONDecoder().decode(AperturaPlumaResponse.self, from: data))?.message
-                    ?? "No se pudo iniciar la apertura"
                 estado = .normal
-                onResultado(false, mensaje)
+                onResultado(false, mensaje.isEmpty ? "No fue posible abrir la pluma. Inténtalo de nuevo." : mensaje)
             }
         } catch {
             print("❌ Error al solicitar apertura de pluma: \(error)")
+            detenerPulsoContinuo()
             estado = .normal
-            onResultado(false, "No se pudo iniciar la apertura")
+            onResultado(false, "Error de conexión o servidor al intentar abrir la pluma.")
         }
     }
 }
@@ -260,12 +368,14 @@ private struct GenerarCodigoTabView: View {
     @State private var vigenciaHoras = 24
     @State private var limiteUsos = 1
     @State private var fechaEvento = Date()
+    @State private var descripcion = ""
     @State private var isSubmitting = false
     @State private var errorPeticion: ErrorPeticionMensaje?
 
     private let opcionesVigencia = [3, 6, 12, 24]
     private let opcionesLimite = [1, 2, 0]
     private let diasMaximosEvento = 15
+    private let maxCaracteresDescripcion = 100
 
     private var fechaMaximaEvento: Date {
         Calendar.current.date(byAdding: .day, value: diasMaximosEvento, to: Date()) ?? Date()
@@ -299,9 +409,11 @@ private struct GenerarCodigoTabView: View {
                     .cornerRadius(10)
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
 
-                CampoSelector(label: "Tipo de acceso", valor: tipoAcceso.label) {
+                GrupoChips(titulo: "Tipo de acceso") {
                     ForEach(TipoAccesoOpcion.allCases) { opcion in
-                        Button(opcion.label) { tipoAcceso = opcion }
+                        ChipOpcion(texto: opcion.label, seleccionado: tipoAcceso == opcion) {
+                            tipoAcceso = opcion
+                        }
                     }
                 }
 
@@ -358,16 +470,39 @@ private struct GenerarCodigoTabView: View {
                     .background(Color.blue.opacity(0.08))
                     .cornerRadius(8)
 
+                    VStack(alignment: .trailing, spacing: 4) {
+                        TextField("Descripción del evento (opcional)", text: $descripcion, axis: .vertical)
+                            .lineLimit(3...5)
+                            .font(.system(size: 15))
+                            .padding(12)
+                            .background(Color.fieldBackground)
+                            .cornerRadius(10)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                            .onChange(of: descripcion) { _, nuevo in
+                                if nuevo.count > maxCaracteresDescripcion {
+                                    descripcion = String(nuevo.prefix(maxCaracteresDescripcion))
+                                }
+                            }
+
+                        Text("\(descripcion.count)/\(maxCaracteresDescripcion)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+
                 case .visita:
-                    CampoSelector(label: "Vigencia", valor: etiquetaVigencia(vigenciaHoras)) {
+                    GrupoChips(titulo: "Vigencia") {
                         ForEach(opcionesVigencia, id: \.self) { horas in
-                            Button(etiquetaVigencia(horas)) { vigenciaHoras = horas }
+                            ChipOpcion(texto: etiquetaVigencia(horas), seleccionado: vigenciaHoras == horas) {
+                                vigenciaHoras = horas
+                            }
                         }
                     }
 
-                    CampoSelector(label: "Límite de usos", valor: etiquetaLimite(limiteUsos)) {
+                    GrupoChips(titulo: "Límite de usos") {
                         ForEach(opcionesLimite, id: \.self) { limite in
-                            Button(etiquetaLimite(limite)) { limiteUsos = limite }
+                            ChipOpcion(texto: etiquetaLimite(limite), seleccionado: limiteUsos == limite) {
+                                limiteUsos = limite
+                            }
                         }
                     }
                 }
@@ -398,15 +533,11 @@ private struct GenerarCodigoTabView: View {
     }
 
     private func etiquetaVigencia(_ horas: Int) -> String {
-        if horas >= 24 && horas % 24 == 0 {
-            let dias = horas / 24
-            return "\(dias) día\(dias == 1 ? "" : "s")"
-        }
-        return "\(horas) hora\(horas == 1 ? "" : "s")"
+        "\(horas) horas"
     }
 
     private func etiquetaLimite(_ limite: Int) -> String {
-        limite == 0 ? "Ilimitado" : "\(limite) uso\(limite == 1 ? "" : "s")"
+        limite == 0 ? "Ilimitados" : "\(limite) uso\(limite == 1 ? "" : "s")"
     }
 
     private func generarToken() async {
@@ -453,31 +584,28 @@ private struct GenerarCodigoTabView: View {
             params["duracion_horas"] = duracionHoras
             params["fecha_expiracion"] = dateFormatter.string(from: fechaEvento)
 
-        case .paqueteria:
-            let horasPaqueteria = 12
-            let fechaExpiracion = Calendar.current.date(byAdding: .hour, value: horasPaqueteria, to: Date()) ?? Date()
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
+            // La descripción es opcional y solo aplica a reuniones (como Android).
+            let descripcionLimpia = descripcion.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !descripcionLimpia.isEmpty {
+                params["descripcion"] = descripcionLimpia
+            }
 
+        case .paqueteria:
+            // Sin fecha_expiracion: el servidor la calcula con duracion_horas (igual que Android).
             params["limite_usos"] = 1
-            params["duracion_horas"] = horasPaqueteria
-            params["fecha_expiracion"] = dateFormatter.string(from: fechaExpiracion)
+            params["duracion_horas"] = 12
 
         case .visita:
-            let fechaExpiracion = Calendar.current.date(byAdding: .hour, value: vigenciaHoras, to: Date()) ?? Date()
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-
+            // Sin fecha_expiracion: el servidor la calcula con duracion_horas (igual que Android).
             params["limite_usos"] = limiteUsos
             params["duracion_horas"] = vigenciaHoras
-            params["fecha_expiracion"] = dateFormatter.string(from: fechaExpiracion)
         }
 
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: params)
 
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             if statusCode == 200 || statusCode == 201 {
@@ -514,7 +642,92 @@ enum TipoAccesoOpcion: String, CaseIterable, Identifiable {
         switch self {
         case .visita: return "Visita"
         case .paqueteria: return "Paquetería"
-        case .reunion: return "Reunión/Evento"
+        case .reunion: return "Reunión / Evento"
+        }
+    }
+}
+
+// MARK: - Chips
+
+private struct GrupoChips<Content: View>: View {
+    let titulo: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(titulo.uppercased())
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.primary)
+
+            ChipsFlowLayout(spacing: 10) {
+                content()
+            }
+        }
+    }
+}
+
+private struct ChipOpcion: View {
+    let texto: String
+    let seleccionado: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
+                if seleccionado {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                Text(texto)
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundColor(.primary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(seleccionado ? Color.blue.opacity(0.18) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(seleccionado ? Color.clear : Color.gray.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Distribuye los chips en filas y salta de línea cuando no caben.
+private struct ChipsFlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, usedWidth: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > maxWidth {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            usedWidth = max(usedWidth, x - spacing)
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: usedWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }
@@ -568,44 +781,15 @@ struct ErrorPeticionDialog: View {
     }
 }
 
-private struct CampoSelector<MenuContent: View>: View {
-    let label: String
-    let valor: String
-    @ViewBuilder let menuContent: () -> MenuContent
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
-
-            Menu {
-                menuContent()
-            } label: {
-                HStack {
-                    Text(valor)
-                        .font(.system(size: 15))
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                }
-                .padding(12)
-                .background(Color.fieldBackground)
-                .cornerRadius(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
-            }
-        }
-    }
-}
-
 // MARK: - Token generado
 
 struct ClaveAccesoGenerada: Decodable, Identifiable {
     var id: String { token ?? UUID().uuidString }
     let token: String?
     let nombre: String?
+    let descripcion: String?
+    let ubicacion_nombre: String?
+    let residencial: String?
     let tipo_acceso: String?
     let limite_usos: Int?
     let usos_restantes: Int?
@@ -627,24 +811,58 @@ struct ClaveAccesoErrorResponse: Decodable {
 
 struct TokenGeneradoSheet: View {
     let token: ClaveAccesoGenerada
+    var residencialFallback: String? = nil
     let onCerrar: () -> Void
 
     @State private var copiado = false
 
     private let botNumero = "14807419374"
 
+    /// Enlace del botón del chat: "Hola, mi código de acceso es {token}" (como Android).
     private var whatsappLink: String {
-        let mensaje = token.token ?? ""
+        let mensaje = "Hola, mi código de acceso es \(token.token ?? "")"
         let encoded = mensaje.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? mensaje
         return "https://wa.me/\(botNumero)?text=\(encoded)"
     }
 
+    private var descripcionLimpia: String? {
+        let texto = token.descripcion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return texto.isEmpty ? nil : texto
+    }
+
+    private var etiquetaNombre: String {
+        let nombre = token.nombre ?? ""
+        if let descripcion = descripcionLimpia {
+            return "Evento/Reunión: \(nombre)\n💬 \(descripcion)"
+        }
+        return "Visitante: \(nombre)"
+    }
+
+    private var etiquetaVigencia: String {
+        var texto = ""
+        if let ubicacion = token.ubicacion_nombre, !ubicacion.isEmpty {
+            texto += "Ubicación: \(ubicacion)\n"
+        }
+        texto += "Válido hasta: \(fechaFormateada)"
+        return texto
+    }
+
     private var mensajeCompartir: String {
-        "Tu código de acceso es: \(token.token ?? ""). Envíalo a nuestro asistente RESDE Guard: \(whatsappLink)"
+        let residencial = token.residencial ?? residencialFallback ?? "Residencial"
+        let codigo = token.token ?? ""
+        let vigencia = token.fecha_expiracion_formato ?? "24 horas"
+        let nombre = token.nombre ?? ""
+        let enlace = "https://wa.me/\(botNumero)?text=\(codigo)"
+        let cierre = "🔑 Código: \(codigo)\n🕒 Válido hasta: \(vigencia)\n\n💬 Toca el siguiente enlace para enviar tu código al asistente RESDE Guard y abrir automáticamente:\n\(enlace)"
+
+        if let descripcion = descripcionLimpia {
+            return "¡Hola! Te comparto la invitación para \(nombre) en \(residencial):\n\n💬 \"\(descripcion)\"\n\n\(cierre)"
+        }
+        return "¡Hola \(nombre)! Te comparto tu código de acceso para entrar a \(residencial):\n\n\(cierre)"
     }
 
     private var fechaFormateada: String {
-        token.fecha_expiracion_formato ?? token.fecha_expiracion ?? "-"
+        token.fecha_expiracion_formato ?? "24 horas"
     }
 
     private var numeroFormateado: String {
@@ -674,14 +892,16 @@ struct TokenGeneradoSheet: View {
                     .font(.system(size: 28, weight: .bold, design: .monospaced))
                     .foregroundColor(.blue)
 
-                if let nombre = token.nombre {
-                    Text("Visitante: \(nombre)")
+                if token.nombre != nil {
+                    Text(etiquetaNombre)
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                Text("Válido hasta: \(fechaFormateada)")
+                Text(etiquetaVigencia)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
 
                 Divider()
                     .padding(.vertical, 4)

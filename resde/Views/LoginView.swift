@@ -16,6 +16,11 @@ struct LoginView: View {
 
     var body: some View {
         loginContent
+            .cargandoDialog(
+                isPresented: authService.isLoading,
+                titulo: "Iniciando sesión",
+                mensaje: "Verificando datos de acceso"
+            )
             .onChange(of: authService.errorMessage) { _, mensaje in
                 if let mensaje = mensaje {
                     errorAlert = ErrorPeticionMensaje(mensaje: mensaje)
@@ -138,7 +143,21 @@ struct LoginView: View {
 
     private func handleLogin() {
         Task {
-            await authService.login(email: email, password: password)
+            // Validaciones en el orden de Android: conexión, correo, contraseña.
+            guard await Conectividad.hayInternet() else {
+                errorAlert = ErrorPeticionMensaje(mensaje: "No cuentas con conexión a internet en este momento.")
+                return
+            }
+            let correo = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !correo.isEmpty else {
+                errorAlert = ErrorPeticionMensaje(mensaje: "Por favor ingresa un correo electrónico válido.")
+                return
+            }
+            guard !password.isEmpty else {
+                errorAlert = ErrorPeticionMensaje(mensaje: "Por favor ingresa tu contraseña.")
+                return
+            }
+            await authService.login(email: correo, password: password)
         }
     }
 }

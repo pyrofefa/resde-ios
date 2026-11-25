@@ -4,6 +4,27 @@ struct CuentasView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel = CuentasViewModel()
     @EnvironmentObject var authService: AuthService
+    @State private var showNuevaCuenta = false
+    @State private var toastMensaje: String?
+
+    private var ubicacionNombre: String {
+        authService.ubicacionActualNombre ?? "N/A"
+    }
+
+    private func recargar() async {
+        guard let id = authService.ubicacionActualId else { return }
+        await viewModel.loadCuentas(ubicacionId: id)
+    }
+
+    private func accionCompletada(_ mensaje: String) {
+        viewModel.selectedCuenta = nil
+        withAnimation { toastMensaje = mensaje }
+        Task {
+            await recargar()
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            withAnimation { toastMensaje = nil }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,7 +53,7 @@ struct CuentasView: View {
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(.secondary)
                                 .textCase(.uppercase)
-                            Text(authService.user?.ubicaciones.first?.value ?? "N/A")
+                            Text(ubicacionNombre)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.primary)
                         }
@@ -95,21 +116,54 @@ struct CuentasView: View {
                         .padding(.horizontal, 16)
                     }
                 }
-                .padding(.vertical, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 90)
             }
+            .refreshable { await recargar() }
         }
         .background(Color.appBackground)
         .navigationBarBackButtonHidden()
         .sheet(item: $viewModel.selectedCuenta) { cuenta in
-            CuentaDetailSheet(cuenta: cuenta)
+            CuentaDetailSheet(cuenta: cuenta, viewModel: viewModel, onActualizado: accionCompletada)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .onAppear {
-            guard let ubicacionId = Int(authService.user?.ubicaciones.first?.key ?? "") else { return }
-            Task {
-                await viewModel.loadCuentas(ubicacionId: ubicacionId)
+        .sheet(isPresented: $showNuevaCuenta) {
+            NuevaCuentaSheet(
+                viewModel: viewModel,
+                ubicacionId: authService.ubicacionActualId ?? 0,
+                ubicacionNombre: ubicacionNombre,
+                isPresented: $showNuevaCuenta,
+                onCreada: accionCompletada
+            )
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Button(action: { showNuevaCuenta = true }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Nueva Cuenta")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(Color.accionPrimaria)
+                .cornerRadius(28)
             }
+            .padding(16)
+            .disabled(authService.ubicacionActualId == nil)
+        }
+        .overlay(alignment: .bottom) {
+            if let mensaje = toastMensaje {
+                SuccessToast(message: mensaje)
+                    .padding(.bottom, 80)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onAppear {
+            Task { await recargar() }
         }
     }
 }

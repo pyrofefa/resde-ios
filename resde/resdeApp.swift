@@ -10,6 +10,7 @@ import CoreData
 
 @main
 struct resdeApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     let persistenceController = PersistenceController.shared
 
     @StateObject private var authService = AuthService(mockData: false)
@@ -32,7 +33,16 @@ struct resdeApp: App {
             .animation(.easeInOut(duration: 0.35), value: authService.isAuthenticated)
             .environment(\.managedObjectContext, persistenceController.container.viewContext)
             .onAppear {
+                PushNotificationManager.shared.configurar(authService)
                 authService.loadTokenFromKeychain()
+            }
+            .onChange(of: authService.isAuthenticated) { _, autenticado in
+                if autenticado {
+                    Task {
+                        await PushNotificationManager.shared.solicitarPermisoYRegistrar()
+                        await PushNotificationManager.shared.enviarTokenAlServidor()
+                    }
+                }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active && authService.isAuthenticated {

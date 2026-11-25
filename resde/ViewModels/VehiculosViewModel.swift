@@ -46,7 +46,7 @@ class VehiculosViewModel: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
 
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw NSError(domain: "API", code: -1)

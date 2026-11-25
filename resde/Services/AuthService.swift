@@ -14,6 +14,48 @@ class AuthService: ObservableObject {
     @Published var isLoading = false
 
     @Published var carouselData: CarouselData = CarouselData()
+    @Published var isLoadingCarousel = false
+
+    // MARK: - Ubicación seleccionada (compartida por toda la app, como en Android)
+
+    private static let ubicacionSeleccionadaDefaultsKey = "ubicacionSeleccionadaKey"
+    @Published private(set) var ubicacionSeleccionadaKey: String? =
+        UserDefaults.standard.string(forKey: "ubicacionSeleccionadaKey")
+
+    /// Ubicación activa: la elegida si sigue siendo válida; si no, la primera (ordenada por id).
+    var ubicacionActualKey: String? {
+        guard let ubicaciones = user?.ubicaciones, !ubicaciones.isEmpty else { return nil }
+        if let elegida = ubicacionSeleccionadaKey, ubicaciones[elegida] != nil { return elegida }
+        return ubicaciones.keys.sorted().first
+    }
+
+    var ubicacionActualId: Int? { ubicacionActualKey.flatMap { Int($0) } }
+
+    // MARK: - Permisos (igual que Android: el súper admin pasa todo)
+
+    func tienePermiso(_ permiso: String) -> Bool {
+        guard let user = user else { return false }
+        return user.is_super_admin == true || user.permissions.contains(permiso)
+    }
+
+    var puedeAbrirPluma: Bool { tienePermiso("acceso.open") }
+    var puedeGenerarCodigo: Bool { tienePermiso("acceso.create") }
+    var puedeVerResumen: Bool { tienePermiso("reporte.resumen") }
+
+    var ubicacionActualNombre: String? {
+        ubicacionActualKey.flatMap { user?.ubicaciones[$0] }
+    }
+
+    func seleccionarUbicacion(_ key: String) {
+        guard user?.ubicaciones[key] != nil else { return }
+        ubicacionSeleccionadaKey = key
+        UserDefaults.standard.set(key, forKey: Self.ubicacionSeleccionadaDefaultsKey)
+    }
+
+    /// True solo en la primera carga (sin datos todavía), para mostrar el indicador con el logo.
+    var cargandoDatosHome: Bool {
+        isLoadingCarousel && carouselData.estadoAdeudos == nil
+    }
 
     private let baseURL = "https://resde.aseenti.com.mx/api/v1"
 
@@ -104,22 +146,12 @@ class AuthService: ObservableObject {
                     UserDefaults.standard.set(try? JSONEncoder().encode(authResponse.data), forKey: "currentUser")
                 }
 
-            case 401:
-                await MainActor.run {
-                    self.errorMessage = "Email o contraseña incorrectos"
-                    self.isLoading = false
-                }
-
-            case 400:
-                let errorMessage = parseErrorResponse(data)
-                await MainActor.run {
-                    self.errorMessage = errorMessage
-                    self.isLoading = false
-                }
-
             default:
+                // `msj` o `message` del servidor; sin texto: "Credenciales incorrectas." (o error de servidor en 5xx).
+                let mensaje = mensajeDelServidor(data)
+                    ?? (httpResponse.statusCode >= 500 ? "Error del servidor. Intenta más tarde." : "Credenciales incorrectas.")
                 await MainActor.run {
-                    self.errorMessage = "Error del servidor. Intenta más tarde."
+                    self.errorMessage = mensaje
                     self.isLoading = false
                 }
             }
@@ -147,6 +179,8 @@ class AuthService: ObservableObject {
         token = nil
         errorMessage = nil
         deleteToken()
+        ubicacionSeleccionadaKey = nil
+        UserDefaults.standard.removeObject(forKey: Self.ubicacionSeleccionadaDefaultsKey)
         UserDefaults.standard.removeObject(forKey: "currentUser")
     }
 
@@ -174,6 +208,12 @@ class AuthService: ObservableObject {
     }
 
     func loadCarouselDataInParallel(ubicacionId: String) async {
+        // Sin permiso de resumen, Android no pide estos datos ni muestra los bloques.
+        guard puedeVerResumen else {
+            await MainActor.run { self.isLoadingCarousel = false }
+            return
+        }
+        await MainActor.run { self.isLoadingCarousel = true }
         async let estadoAdeudos = fetchCarouselData(endpoint: "ubicaciones/estado-adeudos", params: ["ubicacion_id": ubicacionId])
         async let censo = fetchCarouselData(endpoint: "ubicaciones/censo", params: ["ubicacion_id": ubicacionId])
         async let mascotas = fetchCarouselData(endpoint: "ubicaciones/mascotas", params: ["ubicacion_id": ubicacionId])
@@ -211,6 +251,7 @@ class AuthService: ObservableObject {
                 tarjetas: parseCarouselResponse(tarjetasData, type: TarjetasResponse.self),
                 eventos: parseCarouselResponse(eventosData, type: EventosResponse.self)
             )
+            self.isLoadingCarousel = false
         }
     }
 
@@ -235,7 +276,7 @@ class AuthService: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Status code: \(httpResponse.statusCode)")
             }
@@ -274,8 +315,10 @@ class AuthService: ObservableObject {
             let nuevosPermissions = userData.permissions ?? actual.permissions
             let nuevosRoles = userData.roles ?? actual.roles
             let nuevasUbicaciones = userData.ubicaciones ?? actual.ubicaciones
+            let nuevoSuperAdmin = userData.is_super_admin ?? actual.is_super_admin
 
             let huboCambios = Set(nuevosPermissions) != Set(actual.permissions)
+                || nuevoSuperAdmin != actual.is_super_admin
                 || Set(nuevosRoles) != Set(actual.roles)
                 || nuevasUbicaciones != actual.ubicaciones
 
@@ -288,7 +331,7 @@ class AuthService: ObservableObject {
                 residencial_id: userData.residencial_id ?? actual.residencial_id,
                 residencial: userData.residencial ?? actual.residencial,
                 logo: userData.logo ?? actual.logo,
-                is_super_admin: userData.is_super_admin ?? actual.is_super_admin,
+                is_super_admin: nuevoSuperAdmin,
                 ubicaciones: nuevasUbicaciones,
                 roles: nuevosRoles,
                 permissions: nuevosPermissions
@@ -308,24 +351,6 @@ class AuthService: ObservableObject {
         var components = URLComponents(string: "\(baseURL)/\(endpoint)")
         components?.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
         return components?.url
-    }
-
-    private func parseErrorResponse(_ data: Data) -> String {
-        if let errorResponse = try? JSONDecoder().decode(AuthResponse.self, from: data) {
-            return errorResponse.msj
-        }
-
-        if let errorDict = try? JSONDecoder().decode([String: String].self, from: data) {
-            return errorDict["msj"] ?? errorDict["message"] ?? "Datos inválidos"
-        }
-
-        if let errorString = try? JSONDecoder().decode([String: AnyCodable].self, from: data) {
-            if let message = errorString["msj"]?.value as? String {
-                return message
-            }
-        }
-
-        return "Datos inválidos"
     }
 }
 
@@ -361,7 +386,7 @@ struct MeResponse: Codable {
 
 /// Revisa la respuesta de una llamada a la API; si es 401, notifica para que la sesión se cierre.
 /// Debe llamarse justo después de cada `URLSession.shared.data(for:)` que use el Bearer token.
-func checkTokenInvalido(_ response: URLResponse?) {
+func checkTokenInvalido(_ response: URLResponse?, data: Data? = nil) {
     guard let httpResponse = response as? HTTPURLResponse else { return }
 
     // Algunos endpoints responden 401/419 en JSON; otros, cuando el token es
@@ -372,10 +397,25 @@ func checkTokenInvalido(_ response: URLResponse?) {
 
     if statusInvalido || redirigioALogin {
         print("🔒 Token inválido/expirado (\(httpResponse.statusCode)\(redirigioALogin ? ", redirigido a /login" : "")) — cerrando sesión")
+        // Mensaje del servidor (`message` o `msj`); si no hay, el texto oficial de sesión expirada.
+        let mensaje = (statusInvalido ? mensajeDelServidor(data) : nil)
+            ?? "Su sesión ha expirado o fue iniciada en otro dispositivo."
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .tokenInvalido, object: nil)
+            NotificationCenter.default.post(name: .tokenInvalido, object: nil, userInfo: ["mensaje": mensaje])
         }
     }
+}
+
+/// Extrae `msj` o `message` de un cuerpo JSON de error (nil si no hay texto útil).
+func mensajeDelServidor(_ data: Data?) -> String? {
+    guard let data,
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    for clave in ["message", "msj"] {
+        if let texto = (json[clave] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !texto.isEmpty {
+            return texto
+        }
+    }
+    return nil
 }
 
 private enum AnyCodable: Codable {

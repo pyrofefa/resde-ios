@@ -121,7 +121,7 @@ class CensoViewModel: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            checkTokenInvalido(response)
+            checkTokenInvalido(response, data: data)
             if let httpResponse = response as? HTTPURLResponse {
                 print("📊 Censo Status: \(httpResponse.statusCode)")
             }

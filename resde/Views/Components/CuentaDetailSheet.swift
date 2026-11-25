@@ -2,9 +2,18 @@ import SwiftUI
 
 struct CuentaDetailSheet: View {
     let cuenta: Cuenta
+    @ObservedObject var viewModel: CuentasViewModel
+    /// Se llama tras editar, cambiar contraseña o cambiar el estatus, con el mensaje del servidor.
+    let onActualizado: (String) -> Void
+
     @Environment(\.dismiss) var dismiss
     @State private var showChangePassword = false
     @State private var showEditAccount = false
+    @State private var confirmarEstatus = false
+    @State private var isToggling = false
+    @State private var errorAlert: ErrorPeticionMensaje?
+
+    private var esActiva: Bool { cuenta.status == 1 }
 
     var body: some View {
         NavigationView {
@@ -27,31 +36,12 @@ struct CuentaDetailSheet: View {
 
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Teléfono")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                Text(cuenta.telefono ?? "N/A")
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
+                            dato("Teléfono", cuenta.telefono ?? "N/A")
                             Spacer()
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Estado")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                Text(cuenta.status == 1 ? "Activo" : "Inactivo")
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
+                            dato("Estado", esActiva ? "Activo" : "Inactivo")
                         }
-
                         HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("¿Renta?")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                Text(cuenta.renta_texto)
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
+                            dato("¿Renta?", cuenta.renta_texto)
                             Spacer()
                         }
                     }
@@ -83,23 +73,28 @@ struct CuentaDetailSheet: View {
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(12)
-                                .background(Color(red: 0.0, green: 0.4, blue: 0.7))
+                                .background(Color.accionPrimaria)
                                 .cornerRadius(12)
                             }
                         }
 
-                        Button(action: {}) {
+                        Button(action: { confirmarEstatus = true }) {
                             HStack(spacing: 8) {
-                                Image(systemName: "trash")
-                                Text("Desactivar cuenta")
+                                if isToggling {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: esActiva ? "trash" : "plus.circle")
+                                }
+                                Text(esActiva ? "Desactivar cuenta" : "Activar cuenta")
                             }
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.red)
+                            .foregroundColor(esActiva ? .red : Color.statusSuccess)
                             .frame(maxWidth: .infinity)
                             .padding(12)
-                            .background(Color.redTint)
+                            .background(esActiva ? Color.redTint : Color.statusSuccess.opacity(0.12))
                             .cornerRadius(12)
                         }
+                        .disabled(isToggling)
                     }
                 }
                 .padding(16)
@@ -116,13 +111,64 @@ struct CuentaDetailSheet: View {
                 }
             }
             .sheet(isPresented: $showChangePassword) {
-                ChangePasswordSheet(isPresented: $showChangePassword)
-                    .presentationDetents([.fraction(0.6)])
-                    .presentationDragIndicator(.visible)
+                ChangePasswordSheet(
+                    cuenta: cuenta,
+                    viewModel: viewModel,
+                    isPresented: $showChangePassword,
+                    onActualizada: { mensaje in
+                        dismiss()
+                        onActualizado(mensaje)
+                    }
+                )
+                .presentationDetents([.fraction(0.6)])
+                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showEditAccount) {
-                EditarCuentaSheet(cuenta: cuenta, isPresented: $showEditAccount)
+                EditarCuentaSheet(
+                    cuenta: cuenta,
+                    viewModel: viewModel,
+                    isPresented: $showEditAccount,
+                    onGuardado: { mensaje in
+                        dismiss()
+                        onActualizado(mensaje)
+                    }
+                )
             }
+            .sheet(item: $errorAlert) { error in
+                ErrorPeticionDialog(mensaje: error.mensaje, onCerrar: { errorAlert = nil })
+                    .presentationDetents([.fraction(0.45)])
+            }
+            .alert(esActiva ? "Desactivar cuenta" : "Activar cuenta", isPresented: $confirmarEstatus) {
+                Button("Cancelar", role: .cancel) {}
+                Button(esActiva ? "Sí, desactivar" : "Sí, activar", role: esActiva ? .destructive : nil) {
+                    Task { await cambiarEstatus() }
+                }
+            } message: {
+                Text("¿Estás seguro que deseas \(esActiva ? "desactivar" : "activar") la cuenta de \(cuenta.nombre_completo)?")
+            }
+        }
+    }
+
+    private func dato(_ titulo: String, _ valor: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(titulo)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+            Text(valor)
+                .font(.system(size: 16, weight: .semibold))
+        }
+    }
+
+    private func cambiarEstatus() async {
+        isToggling = true
+        let resultado = await viewModel.cambiarEstatus(id: cuenta.id)
+        isToggling = false
+
+        if resultado.exito {
+            dismiss()
+            onActualizado(resultado.mensaje)
+        } else {
+            errorAlert = ErrorPeticionMensaje(mensaje: resultado.mensaje)
         }
     }
 }

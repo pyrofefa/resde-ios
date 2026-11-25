@@ -26,6 +26,10 @@ struct ReportesView: View {
     @State private var showMesAnioPicker = false
     @State private var showDetalleMovimientos = false
 
+    private var mensajeVacio: String {
+        viewModel.mensajeNoPublicado ?? ReportesViewModel.mensajeNoPublicadoPorDefecto
+    }
+
     var body: some View {
         ZStack {
         VStack(spacing: 0) {
@@ -72,7 +76,7 @@ struct ReportesView: View {
                                         .foregroundColor(.secondary)
                                         .multilineTextAlignment(.trailing)
                                 } else {
-                                    Text("Este mes aún no ha sido publicado.")
+                                    Text(viewModel.mensajeNoPublicado ?? ReportesViewModel.mensajeNoPublicadoPorDefecto)
                                         .font(.system(size: 13))
                                         .foregroundColor(.secondary)
                                 }
@@ -88,20 +92,28 @@ struct ReportesView: View {
                                 }
                             })
                         } else {
-                            ReporteCardVacio(title: "RESUMEN FINANCIERO")
+                            ReporteCardVacio(
+                                title: "RESUMEN FINANCIERO",
+                                mensaje: viewModel.mensajeNoPublicado ?? ReportesViewModel.mensajeNoPublicadoPorDefecto
+                            )
                         }
 
-                        ComparacionFuentesCard(grafica: viewModel.totalesGrafica)
+                        ComparacionFuentesCard(
+                            grafica: viewModel.totalesGrafica,
+                            mensajeVacio: mensajeVacio
+                        )
 
                         ComparacionConceptosCard(
                             barrasIngresos: viewModel.barrasIngresos,
                             barrasEgresos: viewModel.barrasEgresos,
+                            mensajeVacio: mensajeVacio,
                             conceptoSeleccionado: $viewModel.conceptoSeleccionado
                         )
 
                         TendenciaCard(
                             tendenciaIngresos: viewModel.tendenciaIngresos,
-                            tendenciaEgresos: viewModel.tendenciaEgresos
+                            tendenciaEgresos: viewModel.tendenciaEgresos,
+                            mensajeVacio: mensajeVacio
                         )
 
                         if viewModel.showError {
@@ -409,6 +421,7 @@ private struct PieSlice: Identifiable {
 
 private struct ComparacionFuentesCard: View {
     let grafica: TotalesGraficaData?
+    var mensajeVacio: String = ReportesViewModel.mensajeNoPublicadoPorDefecto
 
     private var slices: [PieSlice] {
         guard let grafica = grafica else { return [] }
@@ -425,7 +438,7 @@ private struct ComparacionFuentesCard: View {
                 .foregroundColor(.primary)
 
             if slices.isEmpty {
-                Text("Este mes aún no ha sido publicado.")
+                Text(mensajeVacio)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, minHeight: 160)
@@ -460,6 +473,7 @@ private struct ComparacionFuentesCard: View {
 private struct ComparacionConceptosCard: View {
     let barrasIngresos: [BarraConcepto]
     let barrasEgresos: [BarraConcepto]
+    var mensajeVacio: String = ReportesViewModel.mensajeNoPublicadoPorDefecto
     @Binding var conceptoSeleccionado: ConceptoReporte
 
     private var barrasActuales: [BarraConcepto] {
@@ -503,7 +517,7 @@ private struct ComparacionConceptosCard: View {
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.gray.opacity(0.2), lineWidth: 1))
 
             if barrasActuales.isEmpty {
-                Text("Este mes aún no ha sido publicado.")
+                Text(mensajeVacio)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, minHeight: 160)
@@ -570,6 +584,7 @@ private struct ComparacionConceptosCard: View {
 private struct TendenciaCard: View {
     let tendenciaIngresos: [PuntoTendencia]
     let tendenciaEgresos: [PuntoTendencia]
+    var mensajeVacio: String = ReportesViewModel.mensajeNoPublicadoPorDefecto
 
     private var vacio: Bool {
         tendenciaIngresos.isEmpty && tendenciaEgresos.isEmpty
@@ -582,7 +597,7 @@ private struct TendenciaCard: View {
                 .foregroundColor(.primary)
 
             if vacio {
-                Text("Este mes aún no ha sido publicado.")
+                Text(mensajeVacio)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, minHeight: 160)
@@ -712,6 +727,7 @@ struct MesAnioPickerOverlay: View {
 
 struct ReporteCardVacio: View {
     let title: String
+    var mensaje: String = ReportesViewModel.mensajeNoPublicadoPorDefecto
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -719,7 +735,7 @@ struct ReporteCardVacio: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.primary)
 
-            Text("Este mes aún no ha sido publicado.")
+            Text(mensaje)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.primary)
                 .frame(maxWidth: .infinity, minHeight: 160)
