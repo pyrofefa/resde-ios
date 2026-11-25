@@ -32,6 +32,27 @@ struct AperturaYTokensSheet: View {
         _tab = State(initialValue: soloGenerarCodigo ? .generarCodigo : .abrirPluma)
     }
 
+    private var puedeAbrir: Bool { authService.puedeAbrirPluma }
+    private var puedeGenerar: Bool { authService.puedeGenerarCodigo }
+
+    /// Pestañas solo si el usuario tiene ambos permisos (como Android).
+    private var mostrarPestanas: Bool { !soloGenerarCodigo && puedeAbrir && puedeGenerar }
+
+    /// Contenido efectivo según permisos.
+    private var tabEfectiva: AperturaTab {
+        if soloGenerarCodigo { return .generarCodigo }
+        if puedeAbrir && !puedeGenerar { return .abrirPluma }
+        if !puedeAbrir && puedeGenerar { return .generarCodigo }
+        return tab
+    }
+
+    private var mensajeSinPermiso: String? {
+        if soloGenerarCodigo {
+            return puedeGenerar ? nil : "No tienes permisos para generar códigos de acceso"
+        }
+        return (puedeAbrir || puedeGenerar) ? nil : "No tienes permisos para realizar estas acciones"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
@@ -40,7 +61,7 @@ struct AperturaYTokensSheet: View {
                 .padding(.top, 8)
                 .padding(.bottom, 12)
 
-            if !soloGenerarCodigo {
+            if mostrarPestanas {
                 HStack(spacing: 0) {
                     AperturaTabButton(title: "Abrir Pluma", isSelected: tab == .abrirPluma) {
                         tab = .abrirPluma
@@ -53,7 +74,9 @@ struct AperturaYTokensSheet: View {
                 Divider()
             }
 
-            if tab == .abrirPluma {
+            if mensajeSinPermiso != nil {
+                Color.clear.frame(height: 1)
+            } else if tabEfectiva == .abrirPluma {
                 AbrirPlumaTabView(
                     ubicacionId: ubicacionId,
                     authService: authService,
@@ -83,6 +106,12 @@ struct AperturaYTokensSheet: View {
             Spacer(minLength: 0)
         }
         .background(Color.appBackground)
+        .onAppear {
+            if let mensaje = mensajeSinPermiso {
+                onAperturaResultado(mensaje)
+                dismiss()
+            }
+        }
         .sheet(item: $tokenGenerado) { token in
             TokenGeneradoSheet(token: token, onCerrar: {
                 // Solo cerramos la sheet de afuera: al hacerlo, SwiftUI cierra junto

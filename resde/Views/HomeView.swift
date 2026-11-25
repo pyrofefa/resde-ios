@@ -176,17 +176,19 @@ struct HomeContent: View {
             )
             .padding(.horizontal, 16)
 
-            InfoCarousel()
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
+            if authService.puedeVerResumen {
+                InfoCarousel()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
 
-            ResumenSection()
-                .padding(.horizontal, 16)
-                .padding(.top, 15)
+                ResumenSection()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 15)
 
-            PanoramaSection()
-                .padding(.horizontal, 16)
-                .padding(.top, 15)
+                PanoramaSection()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 15)
+            }
 
             ModulesSection(
                 permissions: authService.user?.permissions ?? [],
@@ -220,12 +222,14 @@ struct HomeToolbar: View {
             Spacer()
 
             HStack(spacing: 20) {
-                Button(action: {
-                    showAperturaYTokens = true
-                }) {
-                    Image(systemName: "key.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white)
+                if authService.puedeAbrirPluma || authService.puedeGenerarCodigo {
+                    Button(action: {
+                        showAperturaYTokens = true
+                    }) {
+                        Image(systemName: "key.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white)
+                    }
                 }
 
                 Button(action: {
@@ -836,8 +840,8 @@ struct ModulesSection: View {
                 permissions: permissions,
                 isSuperAdmin: isSuperAdmin,
                 modules: [
-                    ("pago.create", "Pagos", "creditcard.fill"),
-                    ("pago.create", "Mensualidades", "calendar"),
+                    ("pago.manage", "Pagos", "creditcard.fill"),
+                    ("pago.manage", "Mensualidades", "calendar"),
                     ("reporte.view", "Reportes", "chart.bar.fill")
                 ]
             )
@@ -871,8 +875,8 @@ struct ModulesSection: View {
                 isSuperAdmin: isSuperAdmin,
                 modules: [
                     ("tarjetas.manage", "Tarjetas de acceso", "wifi.router.fill"),
-                    (nil, "Claves de acceso", "key.fill"),
-                    (nil, "Historial de accesos", "clock.arrow.circlepath")
+                    ("acceso.manage", "Claves de acceso", "key.fill"),
+                    ("acceso.history", "Historial de accesos", "clock.arrow.circlepath")
                 ]
             )
         }

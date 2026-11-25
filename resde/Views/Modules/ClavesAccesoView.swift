@@ -140,6 +140,7 @@ struct ClavesAccesoView: View {
             .background(Color.appBackground)
             .navigationBarBackButtonHidden()
 
+            if authService.puedeGenerarCodigo {
             VStack {
                 Spacer()
                 HStack {
@@ -159,6 +160,7 @@ struct ClavesAccesoView: View {
                     }
                     .padding(16)
                 }
+            }
             }
 
             if let clave = claveADesactivar {

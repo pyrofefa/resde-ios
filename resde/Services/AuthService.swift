@@ -31,6 +31,17 @@ class AuthService: ObservableObject {
 
     var ubicacionActualId: Int? { ubicacionActualKey.flatMap { Int($0) } }
 
+    // MARK: - Permisos (igual que Android: el súper admin pasa todo)
+
+    func tienePermiso(_ permiso: String) -> Bool {
+        guard let user = user else { return false }
+        return user.is_super_admin == true || user.permissions.contains(permiso)
+    }
+
+    var puedeAbrirPluma: Bool { tienePermiso("acceso.open") }
+    var puedeGenerarCodigo: Bool { tienePermiso("acceso.create") }
+    var puedeVerResumen: Bool { tienePermiso("reporte.resumen") }
+
     var ubicacionActualNombre: String? {
         ubicacionActualKey.flatMap { user?.ubicaciones[$0] }
     }
@@ -207,6 +218,11 @@ class AuthService: ObservableObject {
     }
 
     func loadCarouselDataInParallel(ubicacionId: String) async {
+        // Sin permiso de resumen, Android no pide estos datos ni muestra los bloques.
+        guard puedeVerResumen else {
+            await MainActor.run { self.isLoadingCarousel = false }
+            return
+        }
         await MainActor.run { self.isLoadingCarousel = true }
         async let estadoAdeudos = fetchCarouselData(endpoint: "ubicaciones/estado-adeudos", params: ["ubicacion_id": ubicacionId])
         async let censo = fetchCarouselData(endpoint: "ubicaciones/censo", params: ["ubicacion_id": ubicacionId])
